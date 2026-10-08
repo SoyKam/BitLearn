@@ -142,5 +142,25 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-.vscode
 
+# Frontend and editor files
+pnpm-debug.log*
+dist-ssr/
+*.local
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vscode/*
+!.vscode/extensions.json
+
+# Private credentials and signing material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
