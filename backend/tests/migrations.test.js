@@ -189,4 +189,33 @@ test('migraciones en PostgreSQL temporal aislado', {
     await assert.rejects(runMigrations(pool, { ...silent, directory: dir }), /nombre coincida/);
     assert.equal((await pool.query('SELECT name FROM schema_migrations')).rows[0].name, '001_create_users.sql');
   });
+
+  await t.test('db:migrate termina con 0 al aplicar/omitir y con 1 ante esquema incompatible', async (context) => {
+    const pool = await database(context);
+    const incompatiblePool = await database(context);
+    await incompatiblePool.query(legacySchema.replace(' UNIQUE', ''));
+    const preload = path.join(temporary, 'cli-pool.cjs');
+    // Sustituye únicamente el pool del CLI por uno del clúster temporal.
+    // db.js no se evalúa, por lo que no lee .env, certificados ni credenciales reales.
+    function runCli(databaseName) {
+      fs.writeFileSync(preload, `
+        const { Pool } = require(${JSON.stringify(require.resolve('pg'))});
+        require.cache[${JSON.stringify(require.resolve('../src/config/db'))}] = {
+          exports: new Pool(${JSON.stringify({ ...connection, database: databaseName })})
+        };
+      `);
+      return execFileSync('npm', ['run', 'db:migrate'], {
+        cwd: path.join(__dirname, '..'), encoding: 'utf8', timeout: 10000,
+        env: { ...process.env, NODE_OPTIONS: `--require=${preload}` }, stdio: 'pipe',
+      });
+    }
+    assert.match(runCli(pool.options.database), /Aplicada: 001_create_users.sql/);
+    assert.match(runCli(pool.options.database), /Omitida \(ya aplicada\): 001_create_users.sql/);
+    assert.throws(() => runCli(incompatiblePool.options.database), (error) => {
+      assert.equal(error.status, 1);
+      assert.match(error.stderr, /users tiene una estructura incompatible/);
+      assert.doesNotMatch(error.stderr, /password|hash-ficticio|SELECT|postgresql:\/\//);
+      return true;
+    });
+  });
 });
