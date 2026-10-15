@@ -1,46 +1,82 @@
-const pool = require('./db');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
-// Agrega columnas aquí para que se creen automáticamente al arrancar
-const schema = [
-  {
-    table: 'users',
-    create: `
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        email VARCHAR(150) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `,
-    columns: [
-      { name: 'name',       def: 'VARCHAR(100) NOT NULL' },
-      { name: 'email',      def: 'VARCHAR(150)' },
-      { name: 'password',   def: 'VARCHAR(255) NOT NULL' },
-      { name: 'created_at', def: 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP' },
-    ],
-  },
-];
+const migrationsDirectory = path.join(__dirname, '../../database/migrations');
 
-async function runMigrations() {
-  for (const entry of schema) {
-    await pool.query(entry.create);
+async function runMigrations(pool, { directory = migrationsDirectory, log = console.log } = {}) {
+  const files = (await fs.readdir(directory)).filter((file) => file.endsWith('.sql'));
+  const versions = new Set();
+  const migrations = [];
 
-    const { rows } = await pool.query(
-      'SELECT column_name FROM information_schema.columns WHERE table_name = $1',
-      [entry.table]
-    );
-    const existing = rows.map((r) => r.column_name);
-
-    for (const col of entry.columns) {
-      if (!existing.includes(col.name)) {
-        await pool.query(`ALTER TABLE ${entry.table} ADD COLUMN IF NOT EXISTS ${col.name} ${col.def}`);
-        console.log(`Columna añadida: ${entry.table}.${col.name}`);
-      }
+  for (const name of files) {
+    const match = /^(\d+)_[a-z0-9_]+\.sql$/.exec(name);
+    if (!match || BigInt(match[1]) === 0n) {
+      throw new Error('Los archivos SQL deben usar una versión positiva y un nombre como 001_create_users.sql.');
     }
-
-    console.log(`Tabla lista: ${entry.table}`);
+    const version = BigInt(match[1]).toString();
+    if (versions.has(version)) {
+      throw new Error(`Versión de migración duplicada: ${version}.`);
+    }
+    versions.add(version);
+    migrations.push({ version, name, sql: await fs.readFile(path.join(directory, name), 'utf8') });
   }
+
+  migrations.sort((a, b) => BigInt(a.version) < BigInt(b.version) ? -1 : 1);
+
+  for (const migration of migrations) {
+    let client;
+    let discardClient = false;
+    let applied = false;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      await client.query('SET LOCAL search_path TO public');
+      // La misma clave serializa a todos los migradores de BitLearn en esta BD.
+      // Se adquiere antes de crear/consultar el registro y se libera al terminar la transacción.
+      await client.query('SELECT pg_advisory_xact_lock(72615, 1)');
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.schema_migrations (
+          version TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      const { rows } = await client.query(
+        'SELECT name FROM public.schema_migrations WHERE version = $1',
+        [migration.version]
+      );
+
+      if (rows.length && rows[0].name !== migration.name) {
+        throw new Error('El nombre registrado no coincide; restaura el archivo original de esta versión.');
+      }
+      if (!rows.length) {
+        await client.query(migration.sql);
+        await client.query(
+          'INSERT INTO public.schema_migrations (version, name) VALUES ($1, $2)',
+          [migration.version, migration.name]
+        );
+        applied = true;
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          discardClient = true;
+        }
+      }
+      // No imprimir mensajes de pg: pueden incluir valores de filas o credenciales.
+      const reason = error.code === 'BL001'
+        ? 'users tiene una estructura incompatible; revisa tipos, obligatoriedad, clave primaria, autoincremento, unicidad de email y fecha predeterminada.'
+        : 'revisa la conexión, los permisos, el SQL y que el nombre coincida con el registro de versiones.';
+      throw new Error(`No se pudo aplicar ${migration.name}: ${reason}`);
+    } finally {
+      if (client) client.release(discardClient);
+    }
+    log(`${applied ? 'Aplicada' : 'Omitida (ya aplicada)'}: ${migration.name}`);
+  }
+  if (!migrations.length) log('No hay migraciones SQL.');
 }
 
 module.exports = runMigrations;

@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
-const runMigrations = require('./config/migrate');
 const userRoutes = require('./routes/user.routes');
 const healthRoutes = require('./routes/health.routes');
 
@@ -21,7 +20,6 @@ app.get('/', (req, res) => {
 
 async function start() {
   try {
-    await runMigrations();
     app.listen(PORT, () => {
       console.log(`Servidor en http://localhost:${PORT}`);
       console.log(`Swagger en  http://localhost:${PORT}/api-docs`);
