@@ -1,4 +1,5 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+const path = require('node:path');
 
 const options = {
   definition: {
@@ -15,7 +16,8 @@ const options = {
       },
     ],
   },
-  apis: ['./src/routes/*.js'],
+  // Documentar solo routers públicos activos; el de usuarios sigue deshabilitado.
+  apis: [path.join(__dirname, '../routes/health.routes.js')],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
