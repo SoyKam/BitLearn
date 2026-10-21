@@ -140,7 +140,10 @@ test('migraciones en PostgreSQL temporal aislado', {
     const sequence = (await pool.query('SELECT last_value, is_called FROM users_id_seq')).rows;
     const firstMigration = (await pool.query('SELECT * FROM schema_migrations')).rows;
     const messages = [];
-    await runMigrations(pool, { log: (message) => messages.push(message) });
+    const through002 = directory({
+      '002_create_learning_structure.sql': fs.readFileSync(path.join(initialDirectory, '002_create_learning_structure.sql'), 'utf8'),
+    });
+    await runMigrations(pool, { directory: through002, log: (message) => messages.push(message) });
     assert.deepEqual(messages, [
       'Omitida (ya aplicada): 001_create_users.sql',
       'Aplicada: 002_create_learning_structure.sql',
@@ -173,12 +176,20 @@ test('migraciones en PostgreSQL temporal aislado', {
       return result;
     }
     const before = await snapshot();
+    await runMigrations(pool, silent);
+    const after003 = await snapshot();
+    assert.deepEqual({ ...after003, migrations: before.migrations }, before);
+    assert.deepEqual(after003.migrations.slice(0, 2), before.migrations);
+    assert.equal(after003.migrations[2].version, '3');
+    assert.equal(after003.migrations[2].name, '003_create_auth_sessions.sql');
+    assert.ok(after003.migrations[2].applied_at instanceof Date);
     messages.length = 0;
     await runMigrations(pool, { log: (message) => messages.push(message) });
-    assert.deepEqual(await snapshot(), before);
+    assert.deepEqual(await snapshot(), after003);
     assert.deepEqual(messages, [
       'Omitida (ya aplicada): 001_create_users.sql',
       'Omitida (ya aplicada): 002_create_learning_structure.sql',
+      'Omitida (ya aplicada): 003_create_auth_sessions.sql',
     ]);
   });
 
@@ -220,6 +231,205 @@ test('migraciones en PostgreSQL temporal aislado', {
     await assert.rejects(pool.query('DELETE FROM courses WHERE id = $1', [courses[0].id]), { code: '23503' });
     await assert.rejects(pool.query('DELETE FROM units WHERE id = $1', [units[0].id]), { code: '23503' });
     assert.equal((await pool.query('SELECT count(*) FROM lessons')).rows[0].count, '3');
+  });
+
+  // Hashes ficticios con el formato esperado; no se generan tokens ni credenciales.
+  const firstHash = 'a'.repeat(64);
+  const nextHash = 'b'.repeat(64);
+  const createdAt = '2026-10-01T00:00:00Z';
+  const expiresAt = '2026-10-08T00:00:00Z';
+  const usedAt = '2026-10-02T00:00:00Z';
+
+  async function authFixture(context) {
+    const pool = await database(context);
+    await runMigrations(pool, silent);
+    const user = (await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id',
+      ['Prueba', 'auth@example.invalid', 'hash-ficticio']
+    )).rows[0];
+    const sessions = (await pool.query(`
+      INSERT INTO auth_sessions (user_id, created_at, expires_at)
+      VALUES ($1, $2, $3), ($1, $2, $3) RETURNING *
+    `, [user.id, createdAt, expiresAt])).rows;
+    await pool.query(`
+      INSERT INTO auth_refresh_tokens (token_hash, session_id, created_at, expires_at)
+      VALUES ($1, $2, $3, $4)
+    `, [firstHash, sessions[0].id, createdAt, expiresAt]);
+    return { pool, user, sessions };
+  }
+
+  await t.test('crea las tablas de autenticación vacías con PK, índices y fechas TIMESTAMPTZ', async (context) => {
+    const pool = await database(context);
+    await runMigrations(pool, silent);
+    for (const [table, primaryKey, dates] of [
+      ['auth_sessions', 'id', ['created_at', 'expires_at', 'revoked_at']],
+      ['auth_refresh_tokens', 'token_hash', ['created_at', 'expires_at', 'used_at']],
+    ]) {
+      assert.deepEqual((await pool.query(`SELECT * FROM ${table}`)).rows, []);
+      const columns = (await pool.query(`
+        SELECT column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1 AND column_name = ANY($2)
+        ORDER BY column_name
+      `, [table, dates])).rows;
+      assert.deepEqual(columns, [...dates].sort().map((column_name) => ({
+        column_name, data_type: 'timestamp with time zone',
+      })));
+      assert.deepEqual((await pool.query(`
+        SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+        WHERE conrelid = $1::regclass AND contype = 'p'
+      `, [table])).rows, [{ definition: `PRIMARY KEY (${primaryKey})` }]);
+    }
+    const indexes = (await pool.query(`
+      SELECT indexdef FROM pg_indexes
+      WHERE schemaname = 'public' AND tablename IN ('auth_sessions', 'auth_refresh_tokens')
+    `)).rows.map((row) => row.indexdef);
+    assert.ok(indexes.some((sql) => sql.endsWith('ON public.auth_sessions USING btree (user_id)')));
+    assert.ok(indexes.some((sql) => sql.endsWith('ON public.auth_refresh_tokens USING btree (session_id)')));
+    assert.ok(indexes.some((sql) => sql.includes('UNIQUE INDEX')
+      && sql.endsWith('(session_id) WHERE (used_at IS NULL)')));
+  });
+
+  await t.test('admite varias sesiones por usuario y exige relaciones válidas sin borrado de historial', async (context) => {
+    const { pool, user, sessions } = await authFixture(context);
+    assert.notEqual(sessions[0].id, sessions[1].id);
+    assert.ok(sessions.every((session) => session.user_id === user.id && session.revoked_at === null));
+    await pool.query(`
+      INSERT INTO auth_refresh_tokens (token_hash, session_id, created_at, expires_at)
+      VALUES ($1, $2, $3, $4)
+    `, [nextHash, sessions[1].id, createdAt, expiresAt]);
+    const defaultSession = (await pool.query(`
+      INSERT INTO auth_sessions (user_id, expires_at)
+      VALUES ($1, CURRENT_TIMESTAMP + INTERVAL '2 days') RETURNING id, created_at
+    `, [user.id])).rows[0];
+    assert.ok(defaultSession.created_at instanceof Date);
+    const defaultToken = (await pool.query(`
+      INSERT INTO auth_refresh_tokens (token_hash, session_id, expires_at)
+      VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '1 day') RETURNING created_at, used_at
+    `, ['c'.repeat(64), defaultSession.id])).rows[0];
+    assert.ok(defaultToken.created_at instanceof Date);
+    assert.equal(defaultToken.used_at, null);
+    await assert.rejects(pool.query(`
+      INSERT INTO auth_sessions (user_id, created_at, expires_at) VALUES (-1, $1, $2)
+    `, [createdAt, expiresAt]), { code: '23503' });
+    await assert.rejects(pool.query(`
+      INSERT INTO auth_refresh_tokens (token_hash, session_id, created_at, expires_at)
+      VALUES ($1, -1, $2, $3)
+    `, ['d'.repeat(64), createdAt, expiresAt]), { code: '23503' });
+    await assert.rejects(pool.query('UPDATE auth_sessions SET user_id = -1'), { code: '23503' });
+    await assert.rejects(pool.query('UPDATE auth_refresh_tokens SET session_id = -1 WHERE token_hash = $1', [firstHash]), { code: '23503' });
+    await assert.rejects(pool.query('DELETE FROM users WHERE id = $1', [user.id]), { code: '23503' });
+    await assert.rejects(pool.query('DELETE FROM auth_sessions WHERE id = $1', [sessions[0].id]), { code: '23503' });
+  });
+
+  await t.test('rechaza hashes duplicados o mal formados y datos obligatorios ausentes', async (context) => {
+    const { pool, sessions } = await authFixture(context);
+    const insert = `INSERT INTO auth_refresh_tokens (token_hash, session_id, created_at, expires_at)
+      VALUES ($1, $2, $3, $4)`;
+    // La unicidad del hash es global, incluso entre sesiones diferentes.
+    await assert.rejects(pool.query(insert, [firstHash, sessions[1].id, createdAt, expiresAt]), { code: '23505' });
+    for (const hash of ['', ' ', 'token-original-ficticio', 'a'.repeat(63), 'a'.repeat(65), 'g'.repeat(64), 'A'.repeat(64)]) {
+      await assert.rejects(pool.query(insert, [hash, sessions[1].id, createdAt, expiresAt]), { code: '23514' });
+    }
+    for (const [table, columns] of [
+      ['auth_sessions', ['id', 'user_id', 'created_at', 'expires_at']],
+      ['auth_refresh_tokens', ['token_hash', 'session_id', 'created_at', 'expires_at']],
+    ]) {
+      for (const column of columns) {
+        await assert.rejects(pool.query(`UPDATE ${table} SET ${column} = NULL`), { code: '23502' });
+      }
+    }
+    await assert.rejects(pool.query('INSERT INTO auth_sessions DEFAULT VALUES'), { code: '23502' });
+    await assert.rejects(pool.query('INSERT INTO auth_refresh_tokens DEFAULT VALUES'), { code: '23502' });
+  });
+
+  await t.test('rechaza fechas incoherentes o infinitas y representa revocación después de expirar', async (context) => {
+    const { pool, sessions } = await authFixture(context);
+    for (const table of ['auth_sessions', 'auth_refresh_tokens']) {
+      for (const date of [createdAt, '2026-09-30T00:00:00Z', 'infinity', '-infinity']) {
+        await assert.rejects(pool.query(`UPDATE ${table} SET expires_at = $1`, [date]), { code: '23514' });
+      }
+      for (const date of [expiresAt, 'infinity', '-infinity']) {
+        await assert.rejects(pool.query(`UPDATE ${table} SET created_at = $1`, [date]), { code: '23514' });
+      }
+    }
+    for (const [table, column] of [['auth_sessions', 'revoked_at'], ['auth_refresh_tokens', 'used_at']]) {
+      for (const date of ['2026-09-30T00:00:00Z', 'infinity', '-infinity']) {
+        await assert.rejects(pool.query(`UPDATE ${table} SET ${column} = $1`, [date]), { code: '23514' });
+      }
+    }
+    for (const date of [expiresAt, '2026-10-09T00:00:00Z']) {
+      await assert.rejects(pool.query('UPDATE auth_refresh_tokens SET used_at = $1', [date]), { code: '23514' });
+    }
+    const revokedAt = '2026-10-09T00:00:00Z';
+    await pool.query('UPDATE auth_sessions SET revoked_at = $1 WHERE id = $2', [revokedAt, sessions[0].id]);
+    assert.deepEqual((await pool.query('SELECT id, revoked_at FROM auth_sessions ORDER BY id')).rows, [
+      { id: sessions[0].id, revoked_at: new Date(revokedAt) },
+      { id: sessions[1].id, revoked_at: null },
+    ]);
+  });
+
+  await t.test('representa rotación, conserva hashes usados y repetir migraciones mantiene las sesiones', async (context) => {
+    const { pool, sessions } = await authFixture(context);
+    const insert = `INSERT INTO auth_refresh_tokens (token_hash, session_id, created_at, expires_at)
+      VALUES ($1, $2, $3, $4)`;
+    await assert.rejects(pool.query(insert, [nextHash, sessions[0].id, usedAt, expiresAt]), { code: '23505' });
+    // Fixture SQL del estado persistido; no implementa un servicio de rotación.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE auth_refresh_tokens SET used_at = $1 WHERE token_hash = $2', [usedAt, firstHash]);
+      await client.query(insert, [nextHash, sessions[0].id, usedAt, expiresAt]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    assert.deepEqual((await pool.query(`
+      SELECT token_hash, session_id, used_at FROM auth_refresh_tokens ORDER BY token_hash
+    `)).rows, [
+      { token_hash: firstHash, session_id: sessions[0].id, used_at: new Date(usedAt) },
+      { token_hash: nextHash, session_id: sessions[0].id, used_at: null },
+    ]);
+    // El hash anterior aún permite encontrar su sesión, incluso revocada.
+    await pool.query('UPDATE auth_sessions SET revoked_at = $1 WHERE id = $2', [usedAt, sessions[0].id]);
+    assert.deepEqual((await pool.query(`
+      SELECT s.id, s.revoked_at, r.used_at FROM auth_refresh_tokens r
+      JOIN auth_sessions s ON s.id = r.session_id WHERE r.token_hash = $1
+    `, [firstHash])).rows, [{ id: sessions[0].id, revoked_at: new Date(usedAt), used_at: new Date(usedAt) }]);
+    await assert.rejects(pool.query(insert, [firstHash, sessions[1].id, usedAt, expiresAt]), { code: '23505' });
+    await assert.rejects(pool.query('UPDATE auth_refresh_tokens SET used_at = NULL WHERE token_hash = $1', [firstHash]), { code: '23505' });
+    const before = (await pool.query('SELECT * FROM auth_refresh_tokens ORDER BY token_hash')).rows;
+    const beforeSessions = (await pool.query('SELECT * FROM auth_sessions ORDER BY id')).rows;
+    await runMigrations(pool, silent);
+    assert.deepEqual((await pool.query('SELECT * FROM auth_refresh_tokens ORDER BY token_hash')).rows, before);
+    assert.deepEqual((await pool.query('SELECT * FROM auth_sessions ORDER BY id')).rows, beforeSessions);
+  });
+
+  await t.test('un error al final de 003 revierte tablas, índices y registro y permite reintentar', async (context) => {
+    const pool = await database(context);
+    const dir = directory({
+      '002_create_learning_structure.sql': fs.readFileSync(path.join(initialDirectory, '002_create_learning_structure.sql'), 'utf8'),
+    });
+    await runMigrations(pool, { ...silent, directory: dir });
+    const before = (await pool.query('SELECT * FROM schema_migrations ORDER BY version')).rows;
+    const name = '003_create_auth_sessions.sql';
+    const sql = fs.readFileSync(path.join(initialDirectory, name), 'utf8');
+    fs.writeFileSync(path.join(dir, name), `${sql}\nSELECT 1 / 0;`);
+    await assert.rejects(runMigrations(pool, { ...silent, directory: dir }), /No se pudo aplicar 003_create_auth_sessions.sql/);
+    assert.deepEqual((await pool.query('SELECT * FROM schema_migrations ORDER BY version')).rows, before);
+    assert.deepEqual((await pool.query(`
+      SELECT relname FROM pg_class WHERE relnamespace = 'public'::regnamespace
+      AND relname LIKE 'auth_%'
+    `)).rows, []);
+    // Solo se corrige la copia temporal que falló; no se edita una versión aplicada.
+    fs.writeFileSync(path.join(dir, name), sql);
+    await runMigrations(pool, { ...silent, directory: dir });
+    assert.deepEqual((await pool.query("SELECT version, name FROM schema_migrations WHERE version = '3'")).rows,
+      [{ version: '3', name }]);
+    assert.deepEqual((await pool.query('SELECT * FROM auth_sessions')).rows, []);
+    assert.deepEqual((await pool.query('SELECT * FROM auth_refresh_tokens')).rows, []);
   });
 
   await t.test('un conflicto en 002 revierte la migración completa y conserva la tabla existente', async (context) => {
@@ -287,7 +497,7 @@ test('migraciones en PostgreSQL temporal aislado', {
     await pool.query('ALTER TABLE users ADD COLUMN optional_extra TEXT');
     await runMigrations(pool, silent);
     assert.deepEqual((await pool.query('SELECT version FROM schema_migrations ORDER BY version')).rows,
-      [{ version: '1' }, { version: '2' }]);
+      [{ version: '1' }, { version: '2' }, { version: '3' }]);
   });
 
   await t.test('dos migradores concurrentes aplican cada versión una sola vez', async (context) => {
@@ -343,7 +553,7 @@ test('migraciones en PostgreSQL temporal aislado', {
     }
     const applied = runCli(pool.options.database);
     const skipped = runCli(pool.options.database);
-    for (const name of ['001_create_users.sql', '002_create_learning_structure.sql']) {
+    for (const name of ['001_create_users.sql', '002_create_learning_structure.sql', '003_create_auth_sessions.sql']) {
       assert.ok(applied.includes(`Aplicada: ${name}`));
       assert.ok(skipped.includes(`Omitida (ya aplicada): ${name}`));
     }

@@ -31,3 +31,44 @@ cifrado de la sesión en `pg_stat_ssl` mediante `pg_backend_pid()`, sin necesita
 permisos administrativos. Muestra la base de datos y el resultado TLS, cierra el
 pool y termina con código `0` si la verificación es correcta o `1` ante errores.
 No inicia Express ni ejecuta migraciones. No publiques tu `.env` ni credenciales.
+
+## Migraciones y estructura de sesiones
+
+Desde `backend/`, `npm run db:migrate` aplica las migraciones pendientes en orden,
+una transacción por versión, y las registra en `schema_migrations`. Ejecútalo
+solo después de verificar la base de destino; una segunda ejecución omite las
+versiones ya aplicadas.
+
+La migración `003_create_auth_sessions.sql` agrega dos tablas:
+
+- `auth_sessions`: sesiones independientes vinculadas a `users.id`, con creación,
+  expiración y revocación opcional.
+- `auth_refresh_tokens`: hashes SHA-256 (64 caracteres hexadecimales minúsculos)
+  únicos, vinculados a una sesión, con creación, expiración y uso opcional.
+  Admite un solo token sin consumir por sesión y conserva los hashes consumidos.
+
+Separar sesión e historial permite reconocer un hash utilizado anteriormente y
+revocar su sesión completa sin afectar las otras sesiones del usuario. Los índices
+permiten consultar sesiones por usuario e historial por sesión. Las claves foráneas
+impiden borrar usuarios o sesiones con registros dependientes.
+
+La autenticación **todavía no está implementada**. Quedan pendientes login,
+Access Tokens JWT breves en memoria, Refresh Tokens aleatorios de alta entropía en
+cookies `HttpOnly`, `SameSite=Strict` y `Secure`, logout y detección de reutilización.
+La lógica futura deberá calcular los hashes, comprobar la expiración de ambos y
+la revocación de la sesión, limitar la vigencia del token a la sesión y rotar en una
+transacción con control de concurrencia, conservando el historial necesario.
+No se almacenan Access Tokens ni Refresh Tokens originales en estas tablas;
+la restricción de formato no sustituye el cálculo del hash en la aplicación.
+
+Para probar las migraciones sin usar la base configurada:
+
+```bash
+cd backend
+node --test tests/migrations.test.js
+```
+
+Las pruebas crean y eliminan su propio clúster PostgreSQL temporal mediante un
+socket privado, sin cargar `.env`. Requieren `initdb` y `pg_ctl` (por defecto en
+`/usr/lib/postgresql/16/bin`; ajustable con `POSTGRES_BIN`); si faltan, se omiten
+explícitamente.
