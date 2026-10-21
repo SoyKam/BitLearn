@@ -33,8 +33,8 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
-pool.on('error', (err) => {
-  console.error('Error en PostgreSQL:', err.message);
+pool.on('error', () => {
+  console.error(JSON.stringify({ level: 'error', event: 'postgres_pool_error' }));
 });
 
 module.exports = pool;

@@ -1,5 +1,7 @@
 const pool = require('../config/db');
-const bcrypt = require('bcryptjs');
+const createUserRepository = require('../repositories/user.repository');
+const { createAuthService } = require('../services/auth.service');
+const authService = createAuthService(createUserRepository(pool));
 
 const UserModel = {
   async findAll() {
@@ -26,12 +28,8 @@ const UserModel = {
   },
 
   async create({ name, email, password }) {
-    const hashed = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, created_at',
-      [name, email, hashed]
-    );
-    return rows[0];
+    // Adaptador heredado sin rutas públicas; única implementación de creación.
+    return authService.register({ name, email, password });
   },
 
   async update(id, { name, email }) {
