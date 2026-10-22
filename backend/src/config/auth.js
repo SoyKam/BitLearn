@@ -21,7 +21,18 @@ function loadAuthConfig(env = process.env) {
   if (allowHttp === 'true' && (env.NODE_ENV !== 'development' || env.CODESPACES === 'true')) {
     throw new Error('La cookie sin Secure solo se permite en desarrollo HTTP local, fuera de Codespaces.');
   }
+  const trustedOrigins = (env.AUTH_TRUSTED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean);
+  for (const origin of trustedOrigins) {
+    let url;
+    try { url = new URL(origin); } catch { /* Mensaje fijo, sin reflejar configuración. */ }
+    const localHttp = url?.protocol === 'http:' && allowHttp === 'true'
+      && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (!url || url.origin !== origin || (url.protocol !== 'https:' && !localHttp)) {
+      throw new Error('AUTH_TRUSTED_ORIGINS debe contener orígenes HTTPS exactos separados por comas; HTTP solo en desarrollo local explícito.');
+    }
+  }
   return Object.freeze({
+    trustedOrigins: Object.freeze(trustedOrigins),
     signingKey,
     issuer: env.AUTH_JWT_ISSUER,
     audience: env.AUTH_JWT_AUDIENCE,

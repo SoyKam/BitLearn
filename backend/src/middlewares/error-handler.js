@@ -1,7 +1,10 @@
-const { EmailAlreadyRegisteredError, IncorrectCredentialsError } = require('../services/auth.service');
+const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError } = require('../services/auth.service');
 
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+  if (error instanceof InvalidSessionError) {
+    return res.status(401).json({ success: false, message: 'Sesión no válida.' });
+  }
   if (error instanceof IncorrectCredentialsError) {
     return res.status(401).json({ success: false, message: 'Credenciales incorrectas.' });
   }

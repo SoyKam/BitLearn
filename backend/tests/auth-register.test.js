@@ -173,7 +173,7 @@ test('la aplicación monta registro y lo publica en Swagger, conservando health 
   await response.json();
   assert.equal(query.mock.callCount(), 1);
   const spec = require('../src/config/swagger');
-  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/register', '/api/health']);
+  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/refresh', '/api/auth/register', '/api/health']);
   assert.deepEqual(Object.keys(spec.paths['/api/auth/register'].post.responses), ['201', '400', '409', '429', '500']);
   const swagger = await fetch(`${base}/api-docs/swagger-ui-init.js`);
   assert.match(await swagger.text(), /"\/api\/auth\/register"/);
