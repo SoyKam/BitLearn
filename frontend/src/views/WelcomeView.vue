@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useAuthStore } from '../stores/auth.store'
 import { checkHealth, type HealthStatus } from '../services/health.service'
 
 type ConnectionState = 'loading' | HealthStatus
+const auth = useAuthStore()
 
 const connectionState = ref<ConnectionState>('loading')
 const connectionMessages: Record<ConnectionState, string> = {
@@ -19,6 +22,7 @@ async function retryConnection() {
 }
 
 onMounted(async () => {
+  void auth.restoreSession()
   connectionState.value = await checkHealth()
 })
 </script>
@@ -35,6 +39,21 @@ onMounted(async () => {
       Una plataforma de microaprendizaje para aprender desarrollo web mediante
       lecciones cortas y repasos inteligentes, paso a paso y a tu ritmo.
     </p>
+
+    <nav class="auth-links welcome-links" aria-label="Tu cuenta">
+      <template v-if="auth.isAuthenticated">
+        <RouterLink class="button primary" to="/perfil">Ir a mi perfil</RouterLink>
+        <button class="button" type="button" :disabled="auth.loading" @click="auth.logout()">Cerrar sesión</button>
+      </template>
+      <template v-else>
+        <RouterLink class="button primary" to="/registro">Crear cuenta</RouterLink>
+        <RouterLink class="button" to="/iniciar-sesion">Iniciar sesión</RouterLink>
+      </template>
+    </nav>
+    <div v-if="auth.status === 'unavailable'" class="feedback" role="status">
+      <p>{{ auth.error?.message }}</p>
+      <button class="button" type="button" :disabled="auth.loading" @click="auth.restoreSession(true)">Reintentar sesión</button>
+    </div>
 
     <aside class="preview" aria-labelledby="preview-title">
       <h2 id="preview-title">Aprender hoy. Recordar mañana.</h2>
