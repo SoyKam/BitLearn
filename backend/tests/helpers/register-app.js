@@ -13,11 +13,11 @@ async function serve(t, authService, { route = 'register', config } = {}) {
     server.close((error) => error ? reject(error) : resolve());
   }));
   await once(server, 'listening');
-  return (body, { raw = false, headers = {} } = {}) => fetch(
+  return (body, { raw = false, headers = {}, method = 'POST' } = {}) => fetch(
     `http://127.0.0.1:${server.address().port}/api/auth/${route}`, {
-      method: 'POST',
+      method,
       headers: { 'Content-Type': 'application/json', ...headers },
-      body: raw ? body : JSON.stringify(body),
+      body: method === 'GET' ? undefined : raw ? body : JSON.stringify(body),
     }
   );
 }

@@ -4,11 +4,47 @@ const validateRegister = require('../middlewares/validate-register');
 const createRegisterRateLimit = require('../middlewares/register-rate-limit');
 const requestContext = require('../middlewares/request-context');
 const validateLogin = require('../middlewares/validate-login');
+const createAuthenticate = require('../middlewares/authenticate');
+const createValidateAuthOrigin = require('../middlewares/validate-auth-origin');
+
+function noStore(req, res, next) {
+  res.set('Cache-Control', 'no-store');
+  next();
+}
 
 /**
  * @swagger
  * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ *       description: JWT HS256 de 15 minutos; se comprueba también la sesión activa en PostgreSQL.
+ *     refreshCookie:
+ *       type: apiKey
+ *       in: cookie
+ *       name: bitlearn_refresh
+ *       description: Cookie HttpOnly, SameSite=Strict, Secure por defecto, Path=/api/auth. El navegador la envía; JavaScript no puede leerla.
  *   schemas:
+ *     RefreshResult:
+ *       type: object
+ *       additionalProperties: false
+ *       required: [success, data]
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           enum: [true]
+ *         data:
+ *           type: object
+ *           additionalProperties: false
+ *           required: [accessToken, expiresIn]
+ *           properties:
+ *             accessToken:
+ *               type: string
+ *             expiresIn:
+ *               type: integer
+ *               enum: [900]
  *     RegisterInput:
  *       type: object
  *       additionalProperties: false
@@ -105,6 +141,21 @@ const validateLogin = require('../middlewares/validate-login');
  *               type: integer
  *               enum: [900]
  *   responses:
+ *     InvalidSession:
+ *       description: Token ausente, mal formado, desconocido, expirado o utilizado; sesión expirada, revocada o ajena. Respuesta uniforme sin detalles. Refresh elimina la cookie.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegistrationError'
+ *           example:
+ *             success: false
+ *             message: Sesión no válida.
+ *     InvalidAuthOrigin:
+ *       description: Origin no pertenece a AUTH_TRUSTED_ORIGINS o Fetch Metadata indica origen no permitido sin Origin. No modifica la sesión ni la cookie.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegistrationError'
  *     InvalidRegistration:
  *       description: Datos inválidos, JSON mal formado o cuerpo mayor de 4 KiB.
  *       content:
@@ -171,7 +222,7 @@ const validateLogin = require('../middlewares/validate-login');
  * /api/auth/login:
  *   post:
  *     summary: Iniciar sesión con credenciales
- *     description: Crea una sesión y guarda únicamente el hash SHA-256 del Refresh Token opaco. Sesión y Refresh Token expiran a los 7 días. El token original solo se entrega en cookie HttpOnly. Aún no se implementa renovación, rotación ni cierre de sesión. Las respuestas no se deben almacenar en caché.
+ *     description: Crea una sesión y guarda únicamente el hash SHA-256 del Refresh Token opaco. Sesión y Refresh Token expiran a los 7 días. El token original solo se entrega en cookie HttpOnly y se rota mediante refresh. Logout revoca únicamente esta sesión. Origin, cuando esté presente, debe pertenecer a AUTH_TRUSTED_ORIGINS. Las respuestas no se deben almacenar en caché.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -196,7 +247,7 @@ const validateLogin = require('../middlewares/validate-login');
  *             schema:
  *               $ref: '#/components/schemas/LoginResult'
  *       400:
- *         description: Credenciales con formato inválido, campos adicionales, JSON inválido o cuerpo mayor de 4 KiB.
+ *         description: Credenciales con formato inválido, campos adicionales, JSON inválido, cuerpo mayor de 4 KiB u origen no permitido.
  *         content:
  *           application/json:
  *             schema:
@@ -222,17 +273,118 @@ const validateLogin = require('../middlewares/validate-login');
  *               $ref: '#/components/schemas/RegistrationError'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Renovar credenciales de la sesión
+ *     tags: [Auth]
+ *     security:
+ *       - refreshCookie: []
+ *     description: Lee exclusivamente bitlearn_refresh de la cookie HttpOnly; ignora tokens en cuerpo, URL o encabezados personalizados. Consume el hash anterior e inserta uno nuevo en una transacción con bloqueo de sesión. Conserva el historial; reutilizar un token consumido confirma la revocación antes de responder 401. La sesión conserva su vencimiento original de 7 días. El frontend debe coordinar una sola renovación a la vez, incluso entre pestañas, porque solicitudes concurrentes pueden activar la revocación. Origin debe estar en AUTH_TRUSTED_ORIGINS si está presente. Todas las respuestas usan Cache-Control no-store.
+ *     responses:
+ *       200:
+ *         description: Rotación confirmada; nuevo JWT de 900 segundos. El Refresh Token solo se entrega en cookie.
+ *         headers:
+ *           Set-Cookie:
+ *             description: bitlearn_refresh nuevo; HttpOnly; SameSite=Strict; Secure por defecto; Path=/api/auth; sin Domain; Max-Age limitado al vencimiento original de la sesión.
+ *             schema:
+ *               type: string
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RefreshResult'
+ *       400:
+ *         $ref: '#/components/responses/InvalidAuthOrigin'
+ *       401:
+ *         $ref: '#/components/responses/InvalidSession'
+ *       429:
+ *         description: Más de 60 intentos por IP en 15 minutos (subred /56 IPv6). Cuota en memoria por proceso; tras proxy no confiable se comparte la cuota. No modifica cookie ni sesión.
+ *         headers:
+ *           Retry-After:
+ *             schema:
+ *               type: integer
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RegistrationError'
+ *       500:
+ *         $ref: '#/components/responses/FailedRegistration'
+ * /api/auth/logout:
+ *   post:
+ *     summary: Cerrar únicamente la sesión de la cookie
+ *     tags: [Auth]
+ *     security:
+ *       - refreshCookie: []
+ *       - {}
+ *     description: Revoca la sesión identificada por el hash de la cookie, incluso si el token fue consumido. Conserva el historial y las demás sesiones. Idempotente sin cookie válida o con sesión ya revocada. Origin debe estar en AUTH_TRUSTED_ORIGINS si está presente. Todas las respuestas usan Cache-Control no-store. Un fallo de persistencia devuelve 500, aunque se limpia la cookie; no garantiza la revocación.
+ *     responses:
+ *       200:
+ *         description: Cierre controlado; no revela si existía la sesión.
+ *         headers:
+ *           Set-Cookie:
+ *             description: Elimina bitlearn_refresh con Path=/api/auth, HttpOnly, SameSite=Strict y las mismas reglas de Secure del login.
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: false
+ *               required: [success, message]
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   enum: [true]
+ *                 message:
+ *                   type: string
+ *                   example: Sesión cerrada correctamente.
+ *       400:
+ *         $ref: '#/components/responses/InvalidAuthOrigin'
+ *       500:
+ *         $ref: '#/components/responses/FailedRegistration'
+ * /api/auth/me:
+ *   get:
+ *     summary: Consultar la identidad autenticada
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Solo Authorization Bearer; verifica firma HS256, exp, iat, iss, aud, sub y sid. Comprueba propiedad y vigencia de la sesión en PostgreSQL aunque el JWT no haya expirado. Devuelve exclusivamente el perfil público de sub; no admite seleccionar otro usuario. Todas las respuestas usan Cache-Control no-store. El JWT dura 15 minutos, pero deja de autorizar al revocar o expirar la sesión.
+ *     responses:
+ *       200:
+ *         description: Perfil público de la identidad verificada.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: false
+ *               required: [success, data]
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   enum: [true]
+ *                 data:
+ *                   $ref: '#/components/schemas/RegisteredUser'
+ *       401:
+ *         $ref: '#/components/responses/InvalidSession'
+ *       500:
+ *         $ref: '#/components/responses/FailedRegistration'
  */
 function createAuthRouter(authService, config) {
   const router = Router();
   const controller = createAuthController(authService, config);
+  const validateOrigin = createValidateAuthOrigin(config);
   router.post('/register', requestContext, createRegisterRateLimit(),
     json({ limit: '4kb', inflate: false }), validateRegister, controller.register);
-  router.post('/login', requestContext, (req, res, next) => {
-    res.set('Cache-Control', 'no-store');
-    next();
-  }, createRegisterRateLimit({ limit: 20, action: 'inicio de sesión' }),
+  router.post('/login', requestContext, noStore, validateOrigin,
+  createRegisterRateLimit({ limit: 20, action: 'inicio de sesión' }),
   json({ limit: '4kb', inflate: false }), validateLogin, controller.login);
+  router.post('/refresh', requestContext, noStore, validateOrigin,
+    createRegisterRateLimit({ limit: 60, action: 'renovación' }), controller.refresh);
+  router.post('/logout', requestContext, noStore, validateOrigin, controller.logout);
+  router.get('/me', requestContext, noStore, createAuthenticate(authService), controller.me);
   return router;
 }
 
