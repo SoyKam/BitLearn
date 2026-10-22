@@ -1,7 +1,10 @@
-const { EmailAlreadyRegisteredError } = require('../services/auth.service');
+const { EmailAlreadyRegisteredError, IncorrectCredentialsError } = require('../services/auth.service');
 
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+  if (error instanceof IncorrectCredentialsError) {
+    return res.status(401).json({ success: false, message: 'Credenciales incorrectas.' });
+  }
   if (error instanceof EmailAlreadyRegisteredError) {
     return res.status(409).json({ success: false, message: 'El correo ya está registrado.' });
   }

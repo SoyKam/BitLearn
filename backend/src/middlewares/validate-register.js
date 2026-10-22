@@ -1,8 +1,10 @@
 const { z } = require('zod');
 
+const emailSchema = z.string().trim().toLowerCase().max(150).pipe(z.email());
+
 const registerSchema = z.strictObject({
   name: z.string().trim().min(1).max(100).refine((value) => !/[\u0000-\u001f\u007f]/u.test(value)),
-  email: z.string().trim().toLowerCase().max(150).pipe(z.email()),
+  email: emailSchema,
   password: z.string().min(12).refine((value) => value.trim().length > 0
     && !value.includes('\u0000') && Buffer.byteLength(value, 'utf8') <= 72),
 });
@@ -21,3 +23,4 @@ function validateRegister(req, res, next) {
 }
 
 module.exports = validateRegister;
+module.exports.emailSchema = emailSchema;

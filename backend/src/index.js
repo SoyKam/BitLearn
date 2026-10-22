@@ -8,6 +8,12 @@ const createUserRepository = require('./repositories/user.repository');
 const { createAuthService } = require('./services/auth.service');
 const createAuthRouter = require('./routes/auth.routes');
 const errorHandler = require('./middlewares/error-handler');
+const loadAuthConfig = require('./config/auth');
+const createSessionRepository = require('./repositories/session.repository');
+const createTokenService = require('./services/token.service');
+
+// Fallar antes de escuchar HTTP si faltan secretos o la configuración es insegura.
+const authConfig = loadAuthConfig();
 
 const app = express();
 app.set('trust proxy', false);
@@ -15,9 +21,10 @@ const PORT = process.env.PORT || 3000;
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // El router heredado de usuarios queda sin montar hasta contar con autenticación
-// y autorización reales. El parser JSON se limita al registro.
+// y autorización reales. El parser JSON se limita a las rutas de autenticación.
 app.use('/api/health', healthRoutes);
-app.use('/api/auth', createAuthRouter(createAuthService(createUserRepository(pool))));
+app.use('/api/auth', createAuthRouter(createAuthService(createUserRepository(pool),
+  createSessionRepository(pool), createTokenService(authConfig)), authConfig));
 
 app.get('/', (req, res) => {
   res.json({ message: 'API corriendo', docs: '/api-docs' });

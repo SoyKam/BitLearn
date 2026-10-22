@@ -3,10 +3,10 @@ const express = require('express');
 const createAuthRouter = require('../../src/routes/auth.routes');
 const errorHandler = require('../../src/middlewares/error-handler');
 
-async function serve(t, authService) {
+async function serve(t, authService, { route = 'register', config } = {}) {
   const app = express();
   app.set('trust proxy', false);
-  app.use('/api/auth', createAuthRouter(authService));
+  app.use('/api/auth', createAuthRouter(authService, config));
   app.use(errorHandler);
   const server = app.listen(0, '127.0.0.1');
   t.after(() => new Promise((resolve, reject) => {
@@ -14,7 +14,7 @@ async function serve(t, authService) {
   }));
   await once(server, 'listening');
   return (body, { raw = false, headers = {} } = {}) => fetch(
-    `http://127.0.0.1:${server.address().port}/api/auth/register`, {
+    `http://127.0.0.1:${server.address().port}/api/auth/${route}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: raw ? body : JSON.stringify(body),

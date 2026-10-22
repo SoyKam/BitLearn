@@ -9,6 +9,7 @@ test('la API pública mantiene deshabilitadas las rutas heredadas de usuarios', 
   const internalError = new Error('host=private.example password=secret SELECT * FROM users');
   const query = t.mock.method(pool, 'query', async () => { throw internalError; });
   const connect = t.mock.method(pool, 'connect', async () => { throw internalError; });
+  Object.assign(process.env, require('./helpers/auth-config').testEnvironment());
   const app = require('../src/index');
   const server = app.listen(0, '127.0.0.1');
   t.after(() => new Promise((resolve, reject) => {
