@@ -3,6 +3,7 @@ const createAuthController = require('../controllers/auth.controller');
 const validateRegister = require('../middlewares/validate-register');
 const createRegisterRateLimit = require('../middlewares/register-rate-limit');
 const requestContext = require('../middlewares/request-context');
+const validateLogin = require('../middlewares/validate-login');
 
 /**
  * @swagger
@@ -55,6 +56,54 @@ const requestContext = require('../middlewares/request-context');
  *           enum: [false]
  *         message:
  *           type: string
+ *     LoginInput:
+ *       type: object
+ *       additionalProperties: false
+ *       required: [email, password]
+ *       properties:
+ *         email:
+ *           type: string
+ *           format: email
+ *           maxLength: 150
+ *           description: Espacios exteriores recortados y minúsculas, igual que registro.
+ *         password:
+ *           type: string
+ *           format: password
+ *           writeOnly: true
+ *           minLength: 1
+ *           maxLength: 72
+ *           description: De 1 a 72 bytes UTF-8, sin caracteres nulos. No se recorta ni normaliza.
+ *     LoginResult:
+ *       type: object
+ *       additionalProperties: false
+ *       required: [success, data]
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           enum: [true]
+ *         data:
+ *           type: object
+ *           additionalProperties: false
+ *           required: [user, accessToken, expiresIn]
+ *           properties:
+ *             user:
+ *               type: object
+ *               additionalProperties: false
+ *               required: [id, name, email]
+ *               properties:
+ *                 id:
+ *                   type: integer
+ *                 name:
+ *                   type: string
+ *                 email:
+ *                   type: string
+ *                   format: email
+ *             accessToken:
+ *               type: string
+ *               description: JWT HS256 de 15 minutos, con sub, sid, iat, exp, iss y aud. Mantener exclusivamente en memoria del cliente.
+ *             expiresIn:
+ *               type: integer
+ *               enum: [900]
  *   responses:
  *     InvalidRegistration:
  *       description: Datos inválidos, JSON mal formado o cuerpo mayor de 4 KiB.
@@ -119,12 +168,71 @@ const requestContext = require('../middlewares/request-context');
  *         $ref: '#/components/responses/LimitedRegistration'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ * /api/auth/login:
+ *   post:
+ *     summary: Iniciar sesión con credenciales
+ *     description: Crea una sesión y guarda únicamente el hash SHA-256 del Refresh Token opaco. Sesión y Refresh Token expiran a los 7 días. El token original solo se entrega en cookie HttpOnly. Aún no se implementa renovación, rotación ni cierre de sesión. Las respuestas no se deben almacenar en caché.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginInput'
+ *     responses:
+ *       200:
+ *         description: Sesión confirmada en PostgreSQL y Access Token emitido.
+ *         headers:
+ *           Set-Cookie:
+ *             description: bitlearn_refresh opaco; HttpOnly; SameSite=Strict; Secure por defecto y obligatorio en producción/Codespaces; Path=/api/auth; sin Domain. Max-Age descuenta el tiempo transcurrido para no superar la expiración de PostgreSQL (máximo 604800 segundos). Excepción solo para desarrollo HTTP local explícito.
+ *             schema:
+ *               type: string
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/LoginResult'
+ *       400:
+ *         description: Credenciales con formato inválido, campos adicionales, JSON inválido o cuerpo mayor de 4 KiB.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RegistrationError'
+ *       401:
+ *         description: Credenciales incorrectas, sin distinguir correo inexistente de contraseña incorrecta.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RegistrationError'
+ *             example:
+ *               success: false
+ *               message: Credenciales incorrectas.
+ *       429:
+ *         description: Más de 20 intentos en 15 minutos por IP (subred /56 IPv6), incluidos éxitos y datos inválidos. Tras un proxy no confiable se comparte su cuota.
+ *         headers:
+ *           Retry-After:
+ *             schema:
+ *               type: integer
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RegistrationError'
+ *       500:
+ *         $ref: '#/components/responses/FailedRegistration'
  */
-function createAuthRouter(authService) {
+function createAuthRouter(authService, config) {
   const router = Router();
-  const controller = createAuthController(authService);
+  const controller = createAuthController(authService, config);
   router.post('/register', requestContext, createRegisterRateLimit(),
     json({ limit: '4kb', inflate: false }), validateRegister, controller.register);
+  router.post('/login', requestContext, (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  }, createRegisterRateLimit({ limit: 20, action: 'inicio de sesión' }),
+  json({ limit: '4kb', inflate: false }), validateLogin, controller.login);
   return router;
 }
 

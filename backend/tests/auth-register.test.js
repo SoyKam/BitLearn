@@ -160,6 +160,7 @@ test('la aplicación monta registro y lo publica en Swagger, conservando health 
     return { rows: [{ id: 1, name: values[0], email: values[1], created_at: createdAt }] };
   });
   t.mock.method(pool, 'connect', () => { throw new Error('Prohibido conectar a DB real'); });
+  Object.assign(process.env, require('./helpers/auth-config').testEnvironment());
   const app = require('../src/index');
   const server = app.listen(0, '127.0.0.1');
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -172,7 +173,7 @@ test('la aplicación monta registro y lo publica en Swagger, conservando health 
   await response.json();
   assert.equal(query.mock.callCount(), 1);
   const spec = require('../src/config/swagger');
-  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/register', '/api/health']);
+  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/register', '/api/health']);
   assert.deepEqual(Object.keys(spec.paths['/api/auth/register'].post.responses), ['201', '400', '409', '429', '500']);
   const swagger = await fetch(`${base}/api-docs/swagger-ui-init.js`);
   assert.match(await swagger.text(), /"\/api\/auth\/register"/);

@@ -1,5 +1,11 @@
 function createUserRepository(database) {
   return {
+    async findByEmail(email) {
+      const { rows } = await database.query(
+        'SELECT id, name, email, password FROM public.users WHERE email = $1', [email]
+      );
+      return rows[0] || null;
+    },
     async create({ name, email, passwordHash }) {
       try {
         const { rows } = await database.query(
