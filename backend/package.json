@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "db:check": "node scripts/check-db.js",
-    "db:migrate": "node scripts/migrate.js"
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed:catalog": "node scripts/seed-catalog.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -1,0 +1,68 @@
+[
+  {
+    "title": "HTML",
+    "slug": "html",
+    "description": "Introducción a la estructura y los elementos fundamentales de las páginas web mediante HTML.",
+    "unit": {
+      "title": "Fundamentos de HTML",
+      "lessons": [
+        {
+          "title": "Estructura básica de HTML",
+          "content": "HTML es un lenguaje de marcado que organiza el contenido de una página web. La declaración <!doctype html> indica el uso de HTML moderno. El elemento html contiene head, con metadatos como el título y la codificación, y body, con el contenido de la página. Un documento básico incluye un título en title y puede mostrar un encabezado h1 y un párrafo p dentro de body."
+        },
+        {
+          "title": "Etiquetas y elementos HTML",
+          "content": "Las etiquetas delimitan los elementos de HTML. Por ejemplo, <p>Hola</p> es un párrafo con etiqueta de apertura, contenido y etiqueta de cierre. Los encabezados h1 a h6 organizan secciones; a crea enlaces; ul y li forman listas. Los atributos aportan información, como href en un enlace. Algunos elementos, como img, no tienen etiqueta de cierre; una imagen usa src para su ubicación y alt para su alternativa textual."
+        },
+        {
+          "title": "Formularios HTML",
+          "content": "Un formulario reúne controles para introducir y enviar datos. El elemento form los agrupa; input permite escribir valores, select ofrece opciones y textarea admite varias líneas. Una etiqueta label describe un control y lo vincula mediante for e id. El atributo name identifica el dato enviado y un button con type=\"submit\" permite enviar el formulario. La validación del navegador ayuda al usuario, pero el servidor también debe validar los datos."
+        }
+      ]
+    }
+  },
+  {
+    "title": "CSS",
+    "slug": "css",
+    "description": "Fundamentos de estilos web mediante selectores, propiedades y técnicas básicas de distribución de elementos.",
+    "unit": {
+      "title": "Fundamentos de CSS",
+      "lessons": [
+        {
+          "title": "Selectores CSS",
+          "content": "CSS define la presentación de los elementos HTML. Una regla combina un selector con declaraciones de propiedad y valor. Por ejemplo, p { color: blue; } aplica color azul a los párrafos. El selector .aviso busca una clase y #principal busca un identificador. Varios estilos pueden coincidir sobre un elemento; la cascada, la especificidad y el orden de las reglas ayudan a decidir cuál se aplica."
+        },
+        {
+          "title": "Modelo de caja",
+          "content": "Cada caja de CSS incluye contenido, relleno (padding), borde (border) y margen (margin). El relleno separa el contenido del borde; el margen crea espacio exterior. Con box-sizing: content-box, width y height describen el área de contenido. Con box-sizing: border-box, esas medidas incluyen también el relleno y el borde, pero no el margen. Por ejemplo, padding: 8px agrega relleno en los cuatro lados."
+        },
+        {
+          "title": "Flexbox",
+          "content": "Flexbox distribuye elementos en una dimensión: una fila o una columna. Al aplicar display: flex a un contenedor, sus hijos directos participan en esa distribución. flex-direction define el eje principal; justify-content distribuye el espacio sobre ese eje y align-items alinea en el eje transversal. Por ejemplo, .fila { display: flex; gap: 8px; flex-wrap: wrap; } separa los elementos y permite que pasen a otra línea cuando falta espacio."
+        }
+      ]
+    }
+  },
+  {
+    "title": "JavaScript",
+    "slug": "javascript",
+    "description": "Introducción a la programación web mediante variables, estructuras de control y funciones.",
+    "unit": {
+      "title": "Fundamentos de JavaScript",
+      "lessons": [
+        {
+          "title": "Variables y tipos de datos",
+          "content": "JavaScript permite guardar valores en variables. Usa let cuando necesites reasignar un valor y const cuando no vayas a reasignarlo. Por ejemplo: let edad = 18; const nombre = 'Ana';. Los tipos básicos incluyen number para números, string para texto y boolean para true o false. undefined suele indicar que aún no hay un valor asignado y null expresa una ausencia intencional. const impide reasignar la variable, pero no hace inmutable un objeto."
+        },
+        {
+          "title": "Condicionales",
+          "content": "Una condición permite elegir qué instrucciones ejecutar. if ejecuta un bloque cuando su condición es verdadera; else define la alternativa. Por ejemplo: if (edad >= 18) { mensaje = 'Mayor de edad'; } else { mensaje = 'Menor de edad'; }. Los operadores >, <, >= y <= comparan valores. Usa === para comparar igualdad sin conversión de tipos y !== para comprobar desigualdad sin conversión de tipos."
+        },
+        {
+          "title": "Funciones",
+          "content": "Una función agrupa instrucciones reutilizables. Puede recibir parámetros y devolver un resultado con return. Por ejemplo: function sumar(a, b) { return a + b; }. La llamada sumar(2, 3) invoca la función con dos argumentos y devuelve 5. Puedes guardar el resultado con const total = sumar(2, 3);. Una función que termina sin devolver un valor explícito devuelve undefined."
+        }
+      ]
+    }
+  }
+]

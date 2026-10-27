@@ -1,15 +1,12 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const { Pool } = require('pg');
 const runMigrations = require('../src/config/migrate');
 
-// Nunca carga db.js ni .env: crea su propio clúster, accesible solo por un socket privado.
-const postgresBin = process.env.POSTGRES_BIN || '/usr/lib/postgresql/16/bin';
-const available = ['initdb', 'pg_ctl'].every((file) => fs.existsSync(path.join(postgresBin, file)));
+const { temporaryPostgres, postgresSkip } = require('./helpers/temporary-postgres');
 const initialDirectory = path.join(__dirname, '../database/migrations');
 const legacySchema = `CREATE TABLE public.users (
   id SERIAL PRIMARY KEY,
@@ -21,46 +18,10 @@ const legacySchema = `CREATE TABLE public.users (
 const silent = { log() {} };
 
 test('migraciones en PostgreSQL temporal aislado', {
-  skip: available ? false : 'Falta PostgreSQL local; define POSTGRES_BIN con la carpeta de initdb y pg_ctl.',
+  skip: postgresSkip,
   timeout: 60000,
 }, async (t) => {
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'bitlearn-migrations-'));
-  const data = path.join(temporary, 'data');
-  const socket = path.join(temporary, 'socket');
-  fs.mkdirSync(socket, { mode: 0o700 });
-  let started = false;
-  let admin;
-  t.after(async () => {
-    try {
-      if (admin) await admin.end();
-    } finally {
-      if (started) {
-        execFileSync(path.join(postgresBin, 'pg_ctl'), ['-D', data, '-m', 'fast', '-w', 'stop'], { stdio: 'pipe' });
-      }
-      fs.rmSync(temporary, { recursive: true, force: true });
-    }
-  });
-
-  execFileSync(path.join(postgresBin, 'initdb'), [
-    '-D', data, '-U', 'bitlearn_test', '--auth=trust', '--no-locale', '--encoding=UTF8',
-  ], { stdio: 'pipe' });
-  execFileSync(path.join(postgresBin, 'pg_ctl'), [
-    '-D', data, '-l', path.join(temporary, 'postgres.log'),
-    '-o', `-h '' -k ${socket} -p 55439`, '-w', 'start',
-  ], { stdio: 'pipe' });
-  started = true;
-  const connection = { host: socket, port: 55439, user: 'bitlearn_test', ssl: false, max: 1 };
-  admin = new Pool({ ...connection, database: 'postgres' });
-  let number = 0;
-
-  async function database(context) {
-    // Identificador generado por la prueba; nunca procede de entradas externas.
-    const name = `migration_test_${++number}`;
-    await admin.query(`CREATE DATABASE ${name}`);
-    const pool = new Pool({ ...connection, database: name });
-    context.after(() => pool.end());
-    return pool;
-  }
+  const { temporary, connection, database } = await temporaryPostgres(t);
 
   function directory(files = {}) {
     // Fixture del commit 4: incluye solo 001; las demás versiones son sintéticas.
