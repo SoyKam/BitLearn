@@ -27,8 +27,12 @@ function loadAuthConfig(env = process.env) {
     try { url = new URL(origin); } catch { /* Mensaje fijo, sin reflejar configuración. */ }
     const localHttp = url?.protocol === 'http:' && allowHttp === 'true'
       && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-    if (!url || url.origin !== origin || (url.protocol !== 'https:' && !localHttp)) {
-      throw new Error('AUTH_TRUSTED_ORIGINS debe contener orígenes HTTPS exactos separados por comas; HTTP solo en desarrollo local explícito.');
+    // Codespaces reescribe el Origin del frontend HTTPS al reenviar al puerto de Vite.
+    // Debe autorizarse explícitamente; la cookie continúa siendo Secure.
+    const codespacesProxyOrigin = env.CODESPACES === 'true' && env.NODE_ENV === 'development'
+      && origin === 'http://localhost:5173';
+    if (!url || url.origin !== origin || (url.protocol !== 'https:' && !localHttp && !codespacesProxyOrigin)) {
+      throw new Error('AUTH_TRUSTED_ORIGINS requiere orígenes HTTPS exactos; HTTP solo en desarrollo local explícito o localhost:5173 reenviado por Codespaces en desarrollo.');
     }
   }
   return Object.freeze({

@@ -312,6 +312,32 @@ test('configuración de orígenes rechaza comodines, rutas, credenciales y HTTP 
     AUTH_TRUSTED_ORIGINS: 'http://localhost:5173' })).trustedOrigins, ['http://localhost:5173']);
 });
 
+test('Codespaces admite el origen reescrito explícito y mantiene cookies Secure y rechazo CSRF', async (t) => {
+  const env = { NODE_ENV: 'development', CODESPACES: 'true',
+    AUTH_TRUSTED_ORIGINS: 'https://frontend.example.invalid,http://localhost:5173' };
+  const config = loadAuthConfig(testEnvironment(env));
+  assert.equal(config.cookieSecure, true);
+  const post = await serve(t, { async refresh() { throw new InvalidSessionError(); } }, { route: 'refresh', config });
+  for (const origin of config.trustedOrigins) {
+    const response = await post(undefined, { headers: { Origin: origin, 'Sec-Fetch-Site': 'same-origin' } });
+    assert.equal(response.status, 401);
+    assertCleared(response);
+  }
+  for (const origin of ['https://evil.example.invalid', 'http://localhost:5174', 'http://127.0.0.1:5173', 'null']) {
+    const response = await post(undefined, { headers: { Origin: origin,
+      'X-Forwarded-Host': 'frontend.example.invalid', 'X-Forwarded-Proto': 'https' } });
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get('set-cookie'), null);
+  }
+  for (const overrides of [{ CODESPACES: 'false' }, { NODE_ENV: 'production' },
+    { AUTH_ALLOW_INSECURE_COOKIE: 'true' }, { AUTH_TRUSTED_ORIGINS: 'http://localhost:5174' },
+    { AUTH_TRUSTED_ORIGINS: 'http://127.0.0.1:5173' }]) {
+    assert.throws(() => loadAuthConfig(testEnvironment({ ...env, ...overrides })));
+  }
+  const explicitOnly = loadAuthConfig(testEnvironment({ ...env, AUTH_TRUSTED_ORIGINS: 'https://frontend.example.invalid' }));
+  assert.deepEqual(explicitOnly.trustedOrigins, ['https://frontend.example.invalid']);
+});
+
 test('refresh limita a 60 intentos/15 minutos, sin confiar en X-Forwarded-For', async (t) => {
   const f = fixture(t);
   const post = await serve(t, f.service, { route: 'refresh', config: f.config });
