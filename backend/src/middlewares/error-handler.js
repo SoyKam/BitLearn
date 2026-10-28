@@ -1,4 +1,5 @@
 const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError } = require('../services/auth.service');
+const { CatalogUnavailableError } = require('../services/course.service');
 
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
@@ -19,6 +20,9 @@ function errorHandler(error, req, res, next) {
   console.error(JSON.stringify({
     level: 'error', event: 'request_failed', correlation_id: req.correlationId,
   }));
+  if (error instanceof CatalogUnavailableError) {
+    return res.status(503).json({ success: false, message: 'El catálogo no está disponible temporalmente.' });
+  }
   return res.status(500).json({ success: false, message: 'No se pudo completar la solicitud.' });
 }
 

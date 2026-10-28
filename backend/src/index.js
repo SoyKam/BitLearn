@@ -11,6 +11,9 @@ const errorHandler = require('./middlewares/error-handler');
 const loadAuthConfig = require('./config/auth');
 const createSessionRepository = require('./repositories/session.repository');
 const createTokenService = require('./services/token.service');
+const createCourseRepository = require('./repositories/course.repository');
+const { createCourseService } = require('./services/course.service');
+const createCourseRouter = require('./routes/course.routes');
 
 // Fallar antes de escuchar HTTP si faltan secretos o la configuración es insegura.
 const authConfig = loadAuthConfig();
@@ -25,6 +28,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', createAuthRouter(createAuthService(createUserRepository(pool),
   createSessionRepository(pool), createTokenService(authConfig)), authConfig));
+app.use('/api/courses', createCourseRouter(createCourseService(createCourseRepository(pool))));
 
 app.get('/', (req, res) => {
   res.json({ message: 'API corriendo', docs: '/api-docs' });
