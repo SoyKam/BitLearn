@@ -151,6 +151,15 @@ h1 {
 .course-card { padding: 1.5rem; border: 1px solid #b8ada5; border-top: 4px solid var(--accent); border-radius: 0.75rem; background: #fffaf6; overflow-wrap: anywhere; }
 .course-card h3 { margin: 0 0 0.75rem; font-size: 1.375rem; line-height: 1.3; }
 .course-card p { white-space: pre-wrap; }
+.course-link { margin-top: 1.25rem; }
+.course-detail { max-width: 54rem; margin-inline: auto; overflow-wrap: anywhere; }
+.course-detail .description { white-space: pre-wrap; }
+.course-units, .course-lessons { list-style: none; padding: 0; }
+.course-units { display: grid; gap: 1.25rem; margin-block: 1.25rem 0; }
+.course-lessons { margin: 0; }
+.course-lessons li { padding-block: 0.875rem; border-top: 1px solid #b8ada5; }
+.course-lessons li:last-child { padding-bottom: 0; }
+.lesson-order { font-weight: 650; }
 @media (min-width: 640px) { .course-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .course-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .auth-page { width: 100%; max-width: 30rem; margin-inline: auto; }

@@ -207,3 +207,180 @@ test('fallo al recargar conserva último dato pero marca error, nunca vacío ni 
   await catalog.loadCourses()
   assert.equal(catalog.isEmpty, true)
 })
+
+const lesson = { id: 91, title: 'Lección de prueba', position: 3 }
+const unit = { id: 30, title: 'Unidad de prueba', position: 2, lessons: [lesson] }
+const detail = { ...sample, units: [unit] }
+
+for (const slug of ['html', 'css', 'javascript', 'curso-con-guiones', 'a'.repeat(150)]) {
+  test(`detalle público GET ${slug}: contrato y sin tokens ni campos adicionales`, async t => {
+    const expected = { ...detail, slug }
+    const fetch = t.mock.method(globalThis, 'fetch', async (url, options) => {
+      assert.equal(url, `/api/courses/${encodeURIComponent(slug)}`)
+      assert.equal(options.method, 'GET')
+      assert.deepEqual(options.headers, { Accept: 'application/json' })
+      assert.equal(options.body, undefined)
+      assert.equal(options.redirect, 'error')
+      return Response.json(success({ ...expected, private: true, units: [{ ...unit, private: true, lessons: [{ ...lesson, content: 'No copiar' }] }] }))
+    })
+    assert.deepEqual(await courseService.getCourseBySlug(slug), success(expected))
+    assert.equal(fetch.mock.callCount(), 1)
+  })
+}
+
+for (const slug of ['', 'HTML', ' html', 'html ', 'html\n', 'html\r', 'html--css', '-html', 'html-',
+  'a'.repeat(151), '../auth/me', 'html/css', 'html?query=1', 'html#hash', '%68tml', 'https://example.com',
+  '//example.com', 'javascript:alert(1)', 'html\\css', null, ['html'], 1]) {
+  test(`slug inválido ${JSON.stringify(slug)}: rechazo antes de fetch`, async t => {
+    const fetch = t.mock.method(globalThis, 'fetch', () => { throw new Error('No debe consultar') })
+    await assert.rejects(courseService.getCourseBySlug(slug), { kind: 'validation' })
+    assert.equal(fetch.mock.callCount(), 0)
+  })
+}
+
+const badItems = [null, [], {},
+  ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1', null].map(id => ({ ...lesson, id })),
+  ...['', ' \n ', 12, null].map(title => ({ ...lesson, title })),
+  ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1', null].map(position => ({ ...lesson, position })),
+]
+const invalidDetails = [
+  ...invalidEnvelopes, success([]), success(null),
+  ...invalidCourses.map(course => success(isObject(course) ? { ...course, units: [] } : course)),
+  success({ ...detail, slug: 'otro-curso' }),
+  ...[null, {}, undefined].map(units => success({ ...detail, units })),
+  ...badItems.map(item => success({ ...detail, units: [isObject(item) ? { ...item, lessons: [] } : item] })),
+  ...badItems.map(item => success({ ...detail, units: [{ ...unit, lessons: [item] }] })),
+  ...[null, {}, undefined].map(lessons => success({ ...detail, units: [{ ...unit, lessons }] })),
+  success({ ...detail, units: [unit, { ...unit, position: 4 }] }),
+  success({ ...detail, units: [unit, { ...unit, id: 31 }] }),
+  success({ ...detail, units: [{ ...unit, lessons: [lesson, { ...lesson, position: 4 }] }] }),
+  success({ ...detail, units: [{ ...unit, lessons: [lesson, { ...lesson, id: 92 }] }] }),
+]
+function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value) }
+for (const [index, body] of invalidDetails.entries()) {
+  test(`detalle inválido ${index + 1}: rechazo completo sin reintento`, async t => {
+    const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(body))
+    await assert.rejects(courseService.getCourseBySlug(sample.slug), { kind: 'response' })
+    assert.equal(fetch.mock.callCount(), 1)
+  })
+}
+
+test('detalle ordena por posición, acepta huecos, descripciones null y colecciones vacías', async t => {
+  const first = { ...unit, id: 200, position: 1, lessons: [] }
+  const firstLesson = { ...lesson, id: 900, position: 1 }
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(success({ ...detail, description: null,
+    units: [{ ...unit, lessons: [lesson, firstLesson] }, first] })))
+  assert.deepEqual((await courseService.getCourseBySlug(sample.slug)).data, {
+    ...detail, description: null, units: [first, { ...unit, lessons: [firstLesson, lesson] }],
+  })
+  fetch.mock.mockImplementation(async () => Response.json(success({ ...detail, units: [] })))
+  assert.deepEqual((await courseService.getCourseBySlug(sample.slug)).data.units, [])
+})
+
+for (const [label, reply, kind, status, attempts] of [
+  ['red', () => { throw new TypeError('INTERNAL_TRACE') }, 'connection', null, 2],
+  ...[400, 404, 500, 503].map(status => [String(status), () => Response.json({}, { status }), status === 400 ? 'validation' : status === 404 ? 'not-found' : 'server', status, status === 503 ? 2 : 1]),
+  ['JSON', () => new Response('<html>INTERNAL_TRACE</html>'), 'response', null, 1],
+  ['contrato', () => Response.json(success({ ...detail, units: [null] })), 'response', null, 1],
+]) {
+  test(`detalle store: ${label}, error controlado y recuperación manual`, async t => {
+    const fetch = t.mock.method(globalThis, 'fetch', reply)
+    const catalog = store()
+    await catalog.loadCourseDetail(sample.slug)
+    assert.equal(catalog.detail, null)
+    assert.equal(catalog.detailStatus, 'error')
+    assert.equal(catalog.detailLoading, false)
+    assert.equal(catalog.detailError.kind, kind)
+    assert.equal(catalog.detailError.status, status)
+    assert.ok(!catalog.detailError.message.includes('INTERNAL_TRACE'))
+    assert.equal(fetch.mock.callCount(), attempts)
+    fetch.mock.mockImplementation(async () => Response.json(success(detail)))
+    await catalog.reloadCourseDetail(sample.slug)
+    assert.equal(catalog.detailStatus, 'success')
+    assert.equal(catalog.detailError, null)
+    assert.deepEqual(catalog.detail, detail)
+    assert.equal(fetch.mock.callCount(), attempts + 1)
+  })
+}
+
+test('detalle: estado inicial, deduplicación, caché y separación del catálogo', async t => {
+  const gate = deferred()
+  const fetch = t.mock.method(globalThis, 'fetch', url => url === '/api/courses' ? Response.json(success([sample])) : gate.promise)
+  const catalog = store()
+  assert.equal(catalog.detail, null)
+  assert.equal(catalog.detailSlug, null)
+  assert.equal(catalog.detailStatus, 'idle')
+  assert.equal(catalog.detailError, null)
+  assert.equal(catalog.detailLoading, false)
+  await catalog.loadCourses()
+  const loads = [catalog.loadCourseDetail(sample.slug), catalog.loadCourseDetail(sample.slug), catalog.reloadCourseDetail(sample.slug)]
+  assert.equal(catalog.detailLoading, true)
+  assert.equal(fetch.mock.callCount(), 2)
+  gate.resolve(Response.json(success(detail)))
+  await Promise.all(loads)
+  await catalog.loadCourseDetail(sample.slug)
+  assert.equal(fetch.mock.callCount(), 2)
+  assert.deepEqual(catalog.detail, detail)
+  catalog.clearCourseDetail()
+  assert.equal(catalog.detail, null)
+  assert.equal(catalog.detailStatus, 'idle')
+  assert.deepEqual(catalog.courses, [sample])
+  assert.equal(catalog.status, 'success')
+})
+
+for (const lateStatus of [200, 404, 500]) {
+  test(`cambio HTML → CSS: respuesta antigua ${lateStatus} no sobrescribe CSS ni su carga`, async t => {
+    const html = deferred()
+    const css = deferred()
+    t.mock.method(globalThis, 'fetch', url => url.endsWith('/html') ? html.promise : css.promise)
+    const catalog = store()
+    const first = catalog.loadCourseDetail('html')
+    const second = catalog.loadCourseDetail('css')
+    assert.equal(catalog.detailSlug, 'css')
+    assert.equal(catalog.detail, null)
+    css.resolve(Response.json(success({ ...detail, slug: 'css' })))
+    await second
+    html.resolve(Response.json(success({ ...detail, slug: 'html' }), { status: lateStatus }))
+    await first
+    assert.equal(catalog.detail.slug, 'css')
+    assert.equal(catalog.detailStatus, 'success')
+    assert.equal(catalog.detailError, null)
+  })
+}
+
+test('A → B → A agrupa GET pendiente; limpiar invalida respuestas sin resucitar el detalle', async t => {
+  const html = deferred()
+  const css = deferred()
+  const fetch = t.mock.method(globalThis, 'fetch', url => url.endsWith('/html') ? html.promise : css.promise)
+  const catalog = store()
+  const loads = [catalog.loadCourseDetail('html'), catalog.loadCourseDetail('css'), catalog.loadCourseDetail('html')]
+  assert.equal(fetch.mock.callCount(), 2)
+  html.resolve(Response.json(success({ ...detail, slug: 'html' })))
+  await loads[2]
+  assert.equal(catalog.detail.slug, 'html')
+  catalog.clearCourseDetail()
+  css.resolve(Response.json(success({ ...detail, slug: 'css' })))
+  await Promise.all(loads)
+  assert.equal(catalog.detailStatus, 'idle')
+  assert.equal(catalog.detail, null)
+  assert.equal(catalog.detailError, null)
+})
+
+test('nuevo slug limpia error y datos anteriores mientras carga', async t => {
+  const gate = deferred()
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({}, { status: 404 }))
+  const catalog = store()
+  await catalog.loadCourseDetail('no-existe')
+  fetch.mock.mockImplementation(() => gate.promise)
+  const loading = catalog.loadCourseDetail(sample.slug)
+  assert.equal(catalog.detailError, null)
+  assert.equal(catalog.detail, null)
+  assert.equal(catalog.detailLoading, true)
+  gate.resolve(Response.json(success(detail)))
+  await loading
+  const next = catalog.loadCourseDetail('css')
+  assert.equal(catalog.detail, null)
+  assert.equal(catalog.detailLoading, true)
+  await next
+  assert.equal(catalog.detailError.kind, 'response', 'rechaza un curso distinto del slug solicitado')
+})

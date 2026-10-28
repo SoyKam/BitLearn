@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { courseError, courseService } from '../services/course.service'
-import type { Course, CourseError, CourseStatus } from '../types/course'
+import { courseDetailError, courseError, courseService } from '../services/course.service'
+import type { Course, CourseDetail, CourseDetailError, CourseDetailResponse, CourseError, CourseStatus } from '../types/course'
 
 export const useCourseStore = defineStore('courses', () => {
   const catalog = ref<{ byId: Record<number, Course>; allIds: number[] }>({ byId: {}, allIds: [] })
@@ -48,5 +48,65 @@ export const useCourseStore = defineStore('courses', () => {
 
   function reloadCourses(): Promise<void> { return fetchCourses() }
 
-  return { catalog, status, error, initialized, loading, courses, isEmpty, loadCourses, reloadCourses }
+  const detail = ref<CourseDetail | null>(null)
+  const detailSlug = ref<string | null>(null)
+  const detailStatus = ref<CourseStatus>('idle')
+  const detailError = ref<CourseDetailError | null>(null)
+  const detailLoading = computed(() => detailStatus.value === 'loading')
+  let detailVersion = 0
+  let detailFlight: Promise<void> | null = null
+  const pendingDetails = new Map<string, Promise<CourseDetailResponse>>()
+
+  function fetchCourseDetail(slug: string): Promise<void> {
+    if (detailSlug.value === slug && detailFlight) return detailFlight
+    const version = ++detailVersion
+    detailSlug.value = slug
+    detail.value = null
+    detailError.value = null
+    detailStatus.value = 'loading'
+    // También reutiliza el GET si se navega A → B → A mientras A sigue pendiente.
+    let pending = pendingDetails.get(slug)
+    if (!pending) {
+      pending = courseService.getCourseBySlug(slug).finally(() => pendingDetails.delete(slug))
+      pendingDetails.set(slug, pending)
+    }
+    detailFlight = (async () => {
+      try {
+        const { data } = await pending
+        if (version !== detailVersion) return
+        detail.value = data
+        detailStatus.value = 'success'
+      } catch (cause) {
+        if (version !== detailVersion) return
+        detailError.value = courseDetailError(cause)
+        detailStatus.value = 'error'
+      } finally {
+        if (version === detailVersion) detailFlight = null
+      }
+    })()
+    return detailFlight
+  }
+
+  function loadCourseDetail(slug: string): Promise<void> {
+    // Caché solo del detalle actual, en memoria y hasta salir de la vista.
+    if (detailSlug.value === slug && detailStatus.value === 'success') return Promise.resolve()
+    return fetchCourseDetail(slug)
+  }
+
+  function reloadCourseDetail(slug: string): Promise<void> { return fetchCourseDetail(slug) }
+
+  function clearCourseDetail(): void {
+    ++detailVersion
+    detailFlight = null
+    detail.value = null
+    detailSlug.value = null
+    detailError.value = null
+    detailStatus.value = 'idle'
+  }
+
+  return {
+    catalog, status, error, initialized, loading, courses, isEmpty, loadCourses, reloadCourses,
+    detail, detailSlug, detailStatus, detailError, detailLoading,
+    loadCourseDetail, reloadCourseDetail, clearCourseDetail,
+  }
 })
