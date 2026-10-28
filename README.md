@@ -58,3 +58,35 @@ Las pruebas crean y eliminan su propio clúster PostgreSQL temporal mediante un
 socket privado, sin cargar `.env`. Requieren `initdb` y `pg_ctl` (por defecto en
 `/usr/lib/postgresql/16/bin`; ajustable con `POSTGRES_BIN`); si faltan, se omiten
 explícitamente.
+
+## Detalle público de cursos
+
+`GET /api/courses` lista el catálogo. `GET /api/courses/:slug` consulta un curso
+con sus unidades y lecciones, sin requerir login:
+
+```bash
+curl http://localhost:3000/api/courses/html
+curl http://localhost:3000/api/courses/css
+curl http://localhost:3000/api/courses/javascript
+```
+
+El detalle devuelve `{ success: true, data: { id, title, slug, description, units } }`.
+Cada unidad contiene `id`, `title`, `position` y `lessons`; cada lección solo
+`id`, `title` y `position`, sin `content`. Unidades y lecciones se ordenan por
+`position` ascendente dentro de su padre; las colecciones sin registros son `[]`.
+
+El slug debe tener entre 1 y 150 caracteres, solo minúsculas, números y guiones
+interiores simples. Un slug inválido devuelve **400**; uno válido sin curso
+asociado devuelve **404** (`Curso no encontrado.`). Los fallos internos devuelven
+**500**, y la indisponibilidad identificable de PostgreSQL, **503**, sin detalles
+privados. El contenido depende de los registros existentes en PostgreSQL: estas
+consultas no modifican datos ni cargan seeds automáticamente.
+
+Swagger documenta ambos endpoints en `/api-docs`. Para verificar el catálogo
+con dobles y PostgreSQL temporal, sin usar la base principal:
+
+```bash
+cd backend
+node --test tests/course.test.js tests/course.integration.test.js
+npm test
+```
