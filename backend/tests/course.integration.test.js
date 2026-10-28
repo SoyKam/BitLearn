@@ -26,14 +26,20 @@ test('catálogo HTTP con PostgreSQL temporal aislado', {
   const { connection, database } = await temporaryPostgres(t);
   const pool = await database(t);
   await runMigrations(pool, { log() {} });
-  // El endpoint usa un rol sin acceso a usuarios/sesiones/unidades/lecciones
+  // El endpoint usa un rol sin acceso a usuarios/sesiones/content
   // ni permisos de escritura, además de transacciones de solo lectura.
   await pool.query('CREATE ROLE catalog_reader LOGIN');
   await pool.query('GRANT SELECT (id, title, slug, description) ON public.courses TO catalog_reader');
+  await pool.query('GRANT SELECT (id, course_id, title, position) ON public.units TO catalog_reader');
+  await pool.query('GRANT SELECT (id, unit_id, title, position) ON public.lessons TO catalog_reader');
   const reader = new Pool({ ...connection, database: pool.options.database,
     user: 'catalog_reader', options: '-c default_transaction_read_only=on' });
   t.after(() => reader.end());
-  const base = await serve(t, reader);
+  const queries = [];
+  const base = await serve(t, { async query(...args) {
+    queries.push(args);
+    return reader.query(...args);
+  } });
 
   async function getCourses() {
     const response = await fetch(`${base}/api/courses`);
@@ -82,11 +88,84 @@ test('catálogo HTTP con PostgreSQL temporal aislado', {
     assert.deepEqual(await snapshot(pool), before);
   });
 
-  await t.test('escrituras y detalle no disponibles, health y Swagger siguen funcionando', async () => {
+  await t.test('detalle real de HTML, CSS y JavaScript: relaciones, contrato y dos consultas por curso', async () => {
+    const before = await snapshot(pool);
+    for (const source of catalog) {
+      const course = before.courses.find((item) => item.slug === source.slug);
+      const units = before.units.filter((unit) => unit.course_id === course.id)
+        .sort((a, b) => a.position - b.position).map(({ id, title, position }) => ({
+          id, title, position,
+          lessons: before.lessons.filter((lesson) => lesson.unit_id === id)
+            .sort((a, b) => a.position - b.position)
+            .map(({ id, title, position }) => ({ id, title, position })),
+        }));
+      const count = queries.length;
+      const response = await fetch(`${base}/api/courses/${source.slug}`);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(body, { success: true, data: { ...course, units } });
+      assert.equal(body.data.units[0].title, source.unit.title);
+      assert.deepEqual(body.data.units[0].lessons.map((lesson) => lesson.title),
+        source.unit.lessons.map((lesson) => lesson.title));
+      assert.equal(queries.length - count, 2);
+      assert.deepEqual(queries[count][1], [source.slug]);
+      assert.deepEqual(queries[count + 1][1], [course.id]);
+    }
+    assert.deepEqual(await snapshot(pool), before);
+    assert.equal(reader.totalCount, reader.idleCount);
+  });
+
+  await t.test('fixtures fuera del seed: sin unidades, unidades vacías, orden por posición y sin N+1', async () => {
+    // IDs e inserción en orden distinto a position; escrituras solo para preparar esta base temporal.
+    await pool.query(`INSERT INTO public.units (id, course_id, title, position)
+      VALUES (900, 900, 'Tercera vacía', 9), (901, 900, 'Segunda', 5), (902, 900, 'Primera', 1)`);
+    await pool.query(`INSERT INTO public.lessons (id, unit_id, title, position, content)
+      VALUES (900, 901, 'Lección final', 8, 'Contenido excluido'),
+        (901, 901, 'Lección inicial', 2, 'Contenido excluido'),
+        (902, 902, 'Lección única', 1, 'Contenido excluido')`);
+    const before = await snapshot(pool);
+    const count = queries.length;
+    const empty = await fetch(`${base}/api/courses/css-null`);
+    assert.equal(empty.status, 200);
+    assert.deepEqual(await empty.json(), { success: true, data: {
+      id: 500, title: 'CSS', slug: 'css-null', description: null, units: [],
+    } });
+    const response = await fetch(`${base}/api/courses/css-extra`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { success: true, data: {
+      id: 900, title: 'CSS', slug: 'css-extra', description: 'Curso temporal', units: [
+        { id: 902, title: 'Primera', position: 1, lessons: [{ id: 902, title: 'Lección única', position: 1 }] },
+        { id: 901, title: 'Segunda', position: 5, lessons: [
+          { id: 901, title: 'Lección inicial', position: 2 }, { id: 900, title: 'Lección final', position: 8 },
+        ] },
+        { id: 900, title: 'Tercera vacía', position: 9, lessons: [] },
+      ],
+    } });
+    assert.equal(queries.length - count, 4);
+    assert.deepEqual(await snapshot(pool), before);
+  });
+
+  await t.test('404 e inyección inválida: sin consultas innecesarias ni cambios de registros', async () => {
+    const before = await snapshot(pool);
+    const count = queries.length;
+    const missing = await fetch(`${base}/api/courses/curso-inexistente`);
+    assert.equal(missing.status, 404);
+    assert.deepEqual(await missing.json(), { success: false, message: 'Curso no encontrado.' });
+    assert.equal(queries.length - count, 1);
+    for (const slug of ['HTML', "html'; DROP TABLE public.courses; --", 'html/../../users']) {
+      const response = await fetch(`${base}/api/courses/${encodeURIComponent(slug)}`);
+      assert.equal(response.status, 400);
+      assert.deepEqual(await response.json(), { success: false, message: 'Slug de curso inválido.' });
+    }
+    assert.equal(queries.length - count, 1);
+    assert.deepEqual(await snapshot(pool), before);
+  });
+
+  await t.test('escrituras no disponibles, health y Swagger siguen funcionando', async () => {
     const before = await snapshot(pool);
     for (const [method, path] of [['POST', '/api/courses'], ['PUT', '/api/courses/70'],
       ['PATCH', '/api/courses/70'], ['DELETE', '/api/courses/70'],
-      ['GET', '/api/courses/html'], ['GET', '/api/users']]) {
+      ['GET', '/api/users']]) {
       const response = await fetch(`${base}${path}`, { method });
       assert.equal(response.status, 404);
       assert.deepEqual(await response.json(), { success: false, message: 'Ruta no encontrada' });
@@ -105,10 +184,12 @@ test('catálogo HTTP con PostgreSQL temporal aislado', {
     const before = await snapshot(pool);
     await pool.query('REVOKE SELECT (id, title, slug, description) ON public.courses FROM catalog_reader');
     try {
-      const response = await fetch(`${base}/api/courses`);
-      assert.equal(response.status, 500);
-      assert.deepEqual(await response.json(), { success: false, message: 'No se pudo completar la solicitud.' });
-      assert.equal(log.mock.callCount(), 1);
+      for (const path of ['/api/courses', '/api/courses/html']) {
+        const response = await fetch(`${base}${path}`);
+        assert.equal(response.status, 500);
+        assert.deepEqual(await response.json(), { success: false, message: 'No se pudo completar la solicitud.' });
+      }
+      assert.equal(log.mock.callCount(), 2);
       assert.doesNotMatch(log.mock.calls[0].arguments[0], /SELECT|permission|catalog_reader|courses|password/);
     } finally {
       await pool.query('GRANT SELECT (id, title, slug, description) ON public.courses TO catalog_reader');
@@ -127,17 +208,22 @@ test('catálogo HTTP con PostgreSQL temporal aislado', {
     await pool.query('ALTER ROLE catalog_reader CONNECTION LIMIT 0');
     const unavailableBase = await serve(context, unavailable);
     try {
-      const response = await fetch(`${unavailableBase}/api/courses`);
-      assert.equal(response.status, 503);
-      assert.deepEqual(await response.json(), {
-        success: false, message: 'El catálogo no está disponible temporalmente.',
-      });
+      for (const path of ['/api/courses', '/api/courses/html']) {
+        const response = await fetch(`${unavailableBase}${path}`);
+        assert.equal(response.status, 503);
+        assert.deepEqual(await response.json(), {
+          success: false, message: 'El catálogo no está disponible temporalmente.',
+        });
+      }
     } finally {
       await pool.query('ALTER ROLE catalog_reader CONNECTION LIMIT -1');
     }
     const recovered = await fetch(`${unavailableBase}/api/courses`);
     assert.equal(recovered.status, 200);
     assert.equal((await recovered.json()).data.length, 5);
+    const detail = await fetch(`${unavailableBase}/api/courses/html`);
+    assert.equal(detail.status, 200);
+    assert.equal((await detail.json()).data.units[0].lessons.length, 3);
     assert.deepEqual(await snapshot(pool), before);
   });
 });
