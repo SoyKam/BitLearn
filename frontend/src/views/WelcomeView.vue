@@ -40,6 +40,10 @@ onMounted(async () => {
       lecciones cortas y repasos inteligentes, paso a paso y a tu ritmo.
     </p>
 
+    <nav class="auth-links welcome-links" aria-label="Catálogo de cursos">
+      <RouterLink class="button" to="/cursos">Explorar cursos</RouterLink>
+    </nav>
+
     <nav class="auth-links welcome-links" aria-label="Tu cuenta">
       <template v-if="auth.isAuthenticated">
         <RouterLink class="button primary" to="/perfil">Ir a mi perfil</RouterLink>
