@@ -90,3 +90,6 @@ cd backend
 node --test tests/course.test.js tests/course.integration.test.js
 npm test
 ```
+
+La matriz de cobertura, resultados automatizados, corrección mínima y pendientes
+manuales del commit 19 están en el [informe de cierre de semana 3](docs/verificacion-semana-3.md).

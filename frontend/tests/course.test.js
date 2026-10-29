@@ -277,6 +277,26 @@ test('detalle ordena por posición, acepta huecos, descripciones null y coleccio
   assert.deepEqual((await courseService.getCourseBySlug(sample.slug)).data.units, [])
 })
 
+test('IDs de lección son únicos entre unidades; posiciones iguales con padres distintos son válidas', async t => {
+  const second = { ...unit, id: 31, position: 4, lessons: [{ ...lesson }] }
+  const fetch = t.mock.method(globalThis, 'fetch', async () =>
+    Response.json(success({ ...detail, units: [unit, second] })))
+  const catalog = store()
+  await catalog.loadCourseDetail(sample.slug)
+  assert.equal(catalog.detailStatus, 'error')
+  assert.equal(catalog.detailError.kind, 'response')
+  assert.equal(catalog.detail, null, 'No publicar un detalle con identidades ambiguas')
+  assert.equal(fetch.mock.callCount(), 1)
+
+  const valid = { ...detail, units: [unit, { ...second, lessons: [{ ...lesson, id: 92 }] }] }
+  fetch.mock.mockImplementation(async () => Response.json(success(valid)))
+  await catalog.reloadCourseDetail(sample.slug)
+  assert.equal(catalog.detailStatus, 'success')
+  assert.deepEqual(catalog.detail, valid)
+  assert.equal(catalog.detailError, null)
+  assert.equal(fetch.mock.callCount(), 2)
+})
+
 for (const [label, reply, kind, status, attempts] of [
   ['red', () => { throw new TypeError('INTERNAL_TRACE') }, 'connection', null, 2],
   ...[400, 404, 500, 503].map(status => [String(status), () => Response.json({}, { status }), status === 400 ? 'validation' : status === 404 ? 'not-found' : 'server', status, status === 503 ? 2 : 1]),

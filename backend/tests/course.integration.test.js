@@ -6,6 +6,7 @@ const serve = require('./helpers/course-app');
 const runMigrations = require('../src/config/migrate');
 const { seedCatalog } = require('../src/config/seed-catalog');
 const catalog = require('../database/seeds/001_web_catalog.json');
+const createCourseRepository = require('../src/repositories/course.repository');
 
 async function snapshot(pool) {
   const state = {};
@@ -26,6 +27,22 @@ test('catálogo HTTP con PostgreSQL temporal aislado', {
   const { connection, database } = await temporaryPostgres(t);
   const pool = await database(t);
   await runMigrations(pool, { log() {} });
+  // Fixtures ficticios: hacen significativa la conservación de usuarios y sesiones
+  // en TODOS los snapshots siguientes. Nunca se usan credenciales reales.
+  const user = (await pool.query(`INSERT INTO public.users (name, email, password)
+    VALUES ($1, $2, $3) RETURNING id`,
+  ['Usuario ficticio del catálogo', 'catalog-security@example.invalid', 'hash-ficticio-no-autenticable'])).rows[0];
+  const session = (await pool.query(`INSERT INTO public.auth_sessions (user_id, created_at, expires_at)
+    VALUES ($1, '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z') RETURNING id`, [user.id])).rows[0];
+  await pool.query(`INSERT INTO public.auth_refresh_tokens
+    (token_hash, session_id, created_at, expires_at, used_at) VALUES
+    ($1, $3, '2026-01-01T00:00:00Z', '2027-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
+    ($2, $3, '2026-01-02T00:00:00Z', '2027-01-01T00:00:00Z', NULL)`,
+  ['a'.repeat(64), 'b'.repeat(64), session.id]);
+  const initial = await snapshot(pool);
+  assert.equal(initial.users.length, 1);
+  assert.equal(initial.auth_sessions.length, 1);
+  assert.equal(initial.auth_refresh_tokens.length, 2);
   // El endpoint usa un rol sin acceso a usuarios/sesiones/content
   // ni permisos de escritura, además de transacciones de solo lectura.
   await pool.query('CREATE ROLE catalog_reader LOGIN');
@@ -161,15 +178,36 @@ test('catálogo HTTP con PostgreSQL temporal aislado', {
     assert.deepEqual(await snapshot(pool), before);
   });
 
+  await t.test('SQL directo parametrizado: una tautología es un dato y no recupera otros cursos', async () => {
+    const before = await snapshot(pool);
+    const calls = [];
+    const repository = createCourseRepository({ async query(...args) {
+      calls.push(args);
+      return reader.query(...args);
+    } });
+    for (const slug of ["' OR 1=1 --", "html' OR '1'='1' --"]) {
+      assert.equal(await repository.findBySlug(slug), null);
+      assert.deepEqual(calls.at(-1), [
+        'SELECT id, title, slug, description FROM public.courses WHERE slug = $1', [slug],
+      ]);
+    }
+    assert.equal(calls.length, 2);
+    assert.deepEqual(await snapshot(pool), before);
+  });
+
   await t.test('escrituras no disponibles, health y Swagger siguen funcionando', async () => {
     const before = await snapshot(pool);
-    for (const [method, path] of [['POST', '/api/courses'], ['PUT', '/api/courses/70'],
-      ['PATCH', '/api/courses/70'], ['DELETE', '/api/courses/70'],
+    const count = queries.length;
+    for (const [method, path] of [
+      ...['POST', 'PUT', 'PATCH', 'DELETE'].flatMap(method =>
+        ['/api/courses', '/api/courses/html'].map(path => [method, path])),
+      ['PUT', '/api/courses/70'], ['PATCH', '/api/courses/70'], ['DELETE', '/api/courses/70'],
       ['GET', '/api/users']]) {
       const response = await fetch(`${base}${path}`, { method });
       assert.equal(response.status, 404);
       assert.deepEqual(await response.json(), { success: false, message: 'Ruta no encontrada' });
     }
+    assert.equal(queries.length, count);
     const health = await fetch(`${base}/api/health`);
     assert.equal(health.status, 200);
     assert.deepEqual(await health.json(), { status: 'ok', database: 'connected' });

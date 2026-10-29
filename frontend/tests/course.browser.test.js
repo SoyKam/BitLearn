@@ -11,7 +11,7 @@ let origin
 const courses = [
   { id: 43, title: 'Curso recibido de la API', slug: 'curso-recibido', description: 'Descripción servida por la API de prueba.' },
   { id: 8, title: 'Otro curso', slug: 'otro-curso', description: null },
-  { id: 25, title: 'Texto seguro', slug: 'texto-seguro', description: '<img src=x onerror="window.catalogXss=true">' },
+  { id: 25, title: '<svg onload="window.catalogXss=true">Texto seguro</svg>', slug: 'texto-seguro', description: '<img src=x onerror="window.catalogXss=true">' },
 ]
 const success = data => ({ success: true, data })
 const deferred = () => {
@@ -84,7 +84,7 @@ test('ruta pública: carga anunciada, datos dinámicos, null, texto escapado y s
   assert.equal(await page.getByRole('heading', { level: 2, name: 'Desarrollo Web' }).count(), 1)
   assert.deepEqual(await page.locator('article h3').allTextContents(), courses.map(course => course.title))
   assert.deepEqual(await page.locator('article p').allTextContents(), [courses[0].description, 'Descripción no disponible.', courses[2].description])
-  assert.equal(await page.locator('article img, article script, article button').count(), 0)
+  assert.equal(await page.locator('article img, article svg, article script, article button').count(), 0)
   assert.deepEqual(await page.locator('article a').evaluateAll(links => links.map(link => link.getAttribute('href'))), courses.map(course => `/cursos/${course.slug}`))
   assert.equal(await page.evaluate(() => window.catalogXss), undefined)
   assert.deepEqual(calls.map(call => call.path), ['/api/courses'])
@@ -158,8 +158,8 @@ test('bienvenida y navegación SPA conservan catálogo en memoria y salud; recar
   assert.equal(calls.filter(call => call.path === '/api/courses').length, 2)
 })
 
-test('usuario autenticado puede explorar desde bienvenida sin enviar JWT ni renovar para el catálogo', async t => {
-  const { page, calls } = await setup(t)
+test('usuario autenticado conserva sesión al explorar y ante 401 público, sin JWT ni refresh del catálogo', async t => {
+  const { page, calls, handlers } = await setup(t)
   await page.goto(`${origin}/iniciar-sesion`)
   await page.getByLabel('Correo electrónico', { exact: true }).fill('prueba@example.com')
   await page.getByLabel('Contraseña', { exact: true }).fill('UnaClaveDePrueba2026!')
@@ -167,6 +167,11 @@ test('usuario autenticado puede explorar desde bienvenida sin enviar JWT ni reno
   await page.waitForURL('**/perfil')
   await page.getByRole('link', { name: 'Regresar al inicio' }).click()
   await page.getByRole('link', { name: 'Ir a mi perfil' }).waitFor()
+  const authState = () => page.evaluate(async () => {
+    const { useAuthStore } = await import('/src/stores/auth.store.ts')
+    return JSON.parse(JSON.stringify(useAuthStore().$state))
+  })
+  const before = await authState()
   calls.length = 0
   await page.getByRole('link', { name: 'Explorar cursos' }).click()
   await available(page)
@@ -177,6 +182,17 @@ test('usuario autenticado puede explorar desde bienvenida sin enviar JWT ni reno
   await detailAvailable(page)
   assert.deepEqual(calls.map(call => call.path), ['/api/courses', `/api/courses/${courses[0].slug}`])
   assert.equal(calls[1].headers.authorization, undefined)
+  assert.deepEqual(await authState(), before)
+  handlers.detail = () => ({ status: 401 })
+  await page.evaluate(async slug => {
+    const { useCourseStore } = await import('/src/stores/course.store.ts')
+    await useCourseStore().reloadCourseDetail(slug)
+  }, courses[0].slug)
+  await page.getByRole('status').filter({ hasText: 'No se pudo cargar el curso.' }).waitFor()
+  assert.deepEqual(await authState(), before)
+  assert.deepEqual(calls.map(call => call.path), ['/api/courses',
+    `/api/courses/${courses[0].slug}`, `/api/courses/${courses[0].slug}`])
+  assert.ok(calls.every(call => !call.headers.authorization))
   await page.getByRole('link', { name: 'Volver al catálogo' }).click()
   await page.getByRole('link', { name: 'Ir a mi perfil' }).click()
   await page.getByRole('heading', { name: 'Mi perfil' }).waitFor()
@@ -379,12 +395,16 @@ test('detalle: texto seguro en todos los niveles y diseño móvil sin desbordes'
   const { page, handlers } = await setup(t)
   const unsafe = '<img src=x onerror="window.detailXss=true">'
   const long = 'palabralarga'.repeat(70)
-  handlers.detail = () => ({ body: success({ ...webCourses[0], title: unsafe, description: long,
+  handlers.detail = () => ({ body: success({ ...webCourses[0], title: unsafe, description: unsafe + long,
     units: [{ id: 1, title: unsafe, position: 1, lessons: [{ id: 1, title: unsafe + long, position: 1 }] }],
   }) })
   await page.goto(`${origin}/cursos/html`)
   await detailAvailable(page)
   assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), unsafe)
+  assert.equal(await page.locator('header .description').textContent(), unsafe + long)
+  assert.deepEqual(await page.locator('article h3').allTextContents(), [`Unidad 1 — ${unsafe}`])
+  assert.deepEqual((await page.locator('.course-lessons li').allTextContents()).map(text => text.trim()),
+    [`Lección 1: ${unsafe}${long}`])
   assert.equal(await page.locator('main img, main script').count(), 0)
   assert.equal(await page.evaluate(() => window.detailXss), undefined)
   for (const width of [320, 768, 1280]) {
@@ -396,4 +416,33 @@ test('detalle: texto seguro en todos los niveles y diseño móvil sin desbordes'
   const back = page.getByRole('link', { name: 'Volver al catálogo' })
   assert.equal(await back.evaluate(el => el === document.activeElement), true)
   assert.notEqual(await back.evaluate(el => getComputedStyle(el).outlineStyle), 'none')
+})
+
+test('salir del detalle invalida el GET pendiente y su respuesta no restaura la vista ni el estado', async t => {
+  const { page, handlers, calls } = await setup(t)
+  const entered = deferred()
+  const gate = deferred()
+  handlers.detail = async () => {
+    entered.resolve()
+    await gate.promise
+    return { body: success(detailFor(webCourses[0])) }
+  }
+  await page.goto(`${origin}/cursos/html`)
+  await entered.promise
+  await page.evaluate(async () => {
+    const { useCourseStore } = await import('/src/stores/course.store.ts')
+    window.leavingDetail = useCourseStore().loadCourseDetail('html')
+  })
+  await page.getByRole('link', { name: 'Volver al catálogo' }).click()
+  await available(page)
+  gate.resolve()
+  await page.evaluate(() => window.leavingDetail)
+  assert.equal(new URL(page.url()).pathname, '/cursos')
+  assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), 'Explora nuestros cursos')
+  assert.deepEqual(await page.evaluate(async () => {
+    const { useCourseStore } = await import('/src/stores/course.store.ts')
+    const catalog = useCourseStore()
+    return [catalog.detail, catalog.detailSlug, catalog.detailStatus, catalog.detailError]
+  }), [null, null, 'idle', null])
+  assert.deepEqual(calls.map(call => call.path), ['/api/courses/html', '/api/courses'])
 })

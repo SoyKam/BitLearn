@@ -307,6 +307,27 @@ test('GET /api/courses/:slug: validación, contrato público y errores seguros',
     assert.equal(queries.length, count);
   });
 
+  await t.test('distingue rutas no reconocidas, parámetros codificados y decodificación única', async () => {
+    const count = queries.length;
+    // El slash literal crea otro segmento; el codificado llega al validador del slug.
+    // No usar ../ literal con fetch: su parser URL normaliza los segmentos antes de enviar.
+    for (const [path, status] of [
+      ['html/lecciones', 404], ['..%2Fhtml', 400], ['html%2Fcss', 400],
+      ['%2568tml', 400], ['%ZZ', 400], ['%E0%A4%A', 400],
+    ]) {
+      const response = await fetch(`${base}/api/courses/${path}`);
+      assert.equal(response.status, status, path);
+      assert.deepEqual(await response.json(), { success: false, message: status === 404
+        ? 'Ruta no encontrada' : 'Slug de curso inválido.' });
+    }
+    assert.equal(queries.length, count);
+    const encoded = await fetch(`${base}/api/courses/%68tml`);
+    assert.equal(encoded.status, 200);
+    assert.deepEqual(await encoded.json(), { success: true, data: detail });
+    assert.equal(queries.length - count, 2);
+    assert.deepEqual(queries[count], [detailSql, ['html']]);
+  });
+
   for (const onStructure of [false, true]) {
     for (const code of ['ECONNREFUSED', '57P03', '42P01', '42501', undefined]) {
       await t.test(`error ${code} en ${onStructure ? 'estructura' : 'curso'} no expone detalles`, async (context) => {
