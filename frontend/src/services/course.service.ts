@@ -54,7 +54,11 @@ function decodeCourseDetail(value: unknown, slug: string): CourseDetailResponse 
     || !Array.isArray(value.data.units)) return invalidResponse()
   const course = decodeCourse(value.data)
   if (course.slug !== slug) return invalidResponse()
-  return { success: true, data: { ...course, units: orderedCollection(value.data.units.map(decodeUnit)) } }
+  const units = orderedCollection(value.data.units.map(decodeUnit))
+  // La PK de lessons es global, aunque las posiciones pertenezcan a cada unidad.
+  const lessonIds = units.flatMap(unit => unit.lessons.map(lesson => lesson.id))
+  if (new Set(lessonIds).size !== lessonIds.length) return invalidResponse()
+  return { success: true, data: { ...course, units } }
 }
 
 export function courseDetailError(cause: unknown): CourseDetailError {

@@ -164,3 +164,4 @@ dist-ssr/
 *.pfx
 *.jks
 *.keystore
+*.docs/
