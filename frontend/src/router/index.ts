@@ -12,6 +12,8 @@ const router = createRouter({
     },
     { path: '/cursos', name: 'courses', component: () => import('../views/CoursesView.vue') },
     { path: '/cursos/:slug', name: 'course-detail', component: () => import('../views/CourseDetailView.vue') },
+    { path: '/lecciones/:id', name: 'lesson', component: () => import('../views/LessonView.vue') },
+    { path: '/mi-progreso', name: 'my-progress', component: () => import('../views/ProgressView.vue'), meta: { requiresAuth: true } },
     { path: '/registro', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { guestOnly: true } },
     { path: '/iniciar-sesion', name: 'login', component: () => import('../views/LoginView.vue'), meta: { guestOnly: true } },
     { path: '/perfil', name: 'profile', component: () => import('../views/ProfileView.vue'), meta: { requiresAuth: true } },

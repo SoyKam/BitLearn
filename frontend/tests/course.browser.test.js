@@ -271,7 +271,9 @@ test('tarjetas HTML/CSS/JavaScript: teclado, detalle desde API, orden por posici
     assert.deepEqual((await page.locator('.course-lessons li').allTextContents()).map(text => text.trim()), ['Lección 1: Primera lección', 'Lección 5: Última lección'])
     assert.deepEqual(await page.locator('.course-lessons li').evaluateAll(items => items.map(item => item.value)), [1, 5])
     await page.getByText('Esta unidad todavía no tiene lecciones disponibles.').waitFor()
-    assert.equal(await page.locator('article button, article a').count(), 0)
+    assert.equal(await page.locator('article button').count(), 0)
+    const expectedLessons = detailFor(course).units.flatMap(unit => unit.lessons).sort((a, b) => a.position - b.position)
+    assert.deepEqual(await page.locator('.course-lessons a').evaluateAll(links => links.map(link => link.getAttribute('href'))), expectedLessons.map(lesson => `/lecciones/${lesson.id}`))
     await page.getByRole('link', { name: 'Volver al catálogo' }).click()
     await available(page)
   }

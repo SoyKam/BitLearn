@@ -31,6 +31,8 @@ async function logout() {
     </dl>
     <nav class="auth-links" aria-label="Navegación de perfil">
       <button class="button primary" type="button" :disabled="auth.loading" @click="logout">Cerrar sesión</button>
+      <RouterLink to="/mi-progreso">Mi progreso</RouterLink>
+      <RouterLink to="/cursos">Explorar cursos</RouterLink>
       <RouterLink to="/">Regresar al inicio</RouterLink>
     </nav>
   </main>
