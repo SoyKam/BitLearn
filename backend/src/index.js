@@ -15,6 +15,13 @@ const createCourseRepository = require('./repositories/course.repository');
 const { createCourseService } = require('./services/course.service');
 const createCourseRouter = require('./routes/course.routes');
 
+const createLessonRepository = require('./repositories/lesson.repository');
+const createProgressRepository = require('./repositories/progress.repository');
+const { createLessonService } = require('./services/lesson.service');
+const createProgressService = require('./services/progress.service');
+const createLessonRouter = require('./routes/lesson.routes');
+const createProgressRouter = require('./routes/progress.routes');
+
 // Fallar antes de escuchar HTTP si faltan secretos o la configuración es insegura.
 const authConfig = loadAuthConfig();
 
@@ -24,10 +31,15 @@ const PORT = process.env.PORT || 3000;
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // El router heredado de usuarios queda sin montar hasta contar con autenticación
-// y autorización reales. El parser JSON se limita a las rutas de autenticación.
+// y autorización reales. Cada ruta de escritura limita su propio parser JSON.
 app.use('/api/health', healthRoutes);
-app.use('/api/auth', createAuthRouter(createAuthService(createUserRepository(pool),
-  createSessionRepository(pool), createTokenService(authConfig)), authConfig));
+const authService = createAuthService(createUserRepository(pool),
+  createSessionRepository(pool), createTokenService(authConfig));
+app.use('/api/auth', createAuthRouter(authService, authConfig));
+const progressRepository = createProgressRepository(pool);
+app.use('/api/lessons', createLessonRouter(
+  createLessonService(createLessonRepository(pool), progressRepository), authService));
+app.use('/api/progress', createProgressRouter(createProgressService(progressRepository), authService));
 app.use('/api/courses', createCourseRouter(createCourseService(createCourseRepository(pool))));
 
 app.get('/', (req, res) => {

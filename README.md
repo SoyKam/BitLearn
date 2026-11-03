@@ -126,9 +126,9 @@ el servicio deberá validar resultados representables, sin truncarlos silenciosa
 historial en una transacción con bloqueo de fila y actualizará `updated_at`
 explícitamente; no hay triggers ni cálculo algorítmico SQL.
 
-El commit #21 deberá validar cada alternativa mediante Zod, obtener el usuario
-del JWT validado, comprobar propiedad y ocultar la respuesta correcta hasta que
-el estudiante responda. Las claves separan registros; no sustituyen autorización.
+El backend de lecciones valida las alternativas mediante Zod, obtiene el usuario
+del JWT y comprueba la sesión activa. Las claves separan registros; no sustituyen
+la autorización descrita a continuación.
 
 Pruebas sin acceder a la base principal (requieren PostgreSQL local):
 
@@ -142,3 +142,70 @@ Usan el helper de PostgreSQL temporal y no cargan la conexión real. Cubren roll
 repetición, concurrencia e integridad; la suite completa incluye autenticación y
 catálogo. **`npm run db:migrate` modifica el esquema de la base configurada**:
 no ejecutarlo sobre `bitlearn` sin autorización explícita.
+
+
+## Lecciones, preguntas y progreso (commit #21)
+
+- `GET /api/lessons/:id` es público: devuelve contenido, curso, unidad y preguntas
+  ordenadas por posición. No revela el índice correcto ni `explanation`. Sin
+  preguntas devuelve `questions: []`; lección ausente devuelve 404.
+- `POST /api/lessons/:id/answer` requiere Bearer JWT y sesión activa. Recibe solo
+  `{ "questionId": 1, "optionIndex": 0 }` (IDs ilustrativos). Zod rechaza tipos
+  incorrectos y campos adicionales; el parser admite hasta 4 KiB. El servidor
+  comprueba pertenencia y rango real de la opción, compara la solución y devuelve
+  `correct`, `completed`, `explanation` (puede ser null) y `progress`.
+- `GET /api/progress` requiere la misma autenticación y devuelve `completedLessons`,
+  `totalLessons` calculado desde PostgreSQL y `lessons` con el progreso registrado.
+  Ordena por slug del curso, posición de unidad, posición e ID de lección.
+
+La identidad procede exclusivamente de `req.auth.userId`; no se permite elegir
+un usuario mediante el cuerpo de respuesta. Los IDs de URL deben ser enteros
+positivos decimales sin signo, espacios ni exponentes, hasta 2147483647. Las
+consultas SQL usan parámetros. Las respuestas privadas, incluidos errores, llevan
+`Cache-Control: no-store`; las tres rutas incluyen `x-correlation-id`. Las respuestas
+se limitan a 60 solicitudes por IP cada 15 minutos, en memoria por proceso (subred
+/56 IPv6; tras un proxy no confiable se comparte la cuota). Los contratos y errores
+400/401/404/429/500/503 aplicables se documentan en `/api-docs`.
+
+Cada respuesta válida confirmada suma un intento, y cada acierto suma una respuesta
+correcta. Un `INSERT ... ON CONFLICT DO UPDATE` incrementa sobre el valor existente
+en PostgreSQL, de forma atómica incluso con solicitudes concurrentes. El primer
+acierto completa la lección; `COALESCE` conserva esa primera fecha para siempre.
+Esta regla del MVP corresponde a **una pregunta inicial por lección**: los
+contadores agregados no comprueban dominio de todas las preguntas posibles.
+
+**Las solicitudes repetidas cuentan como intentos independientes.** No hay clave
+de idempotencia para respuestas: el frontend deberá bloquear envíos duplicados
+accidentales y evitar reintentar este POST automáticamente. No se implementa SM-2.
+
+### Carga manual de las nueve preguntas
+
+Con las migraciones 001–004 y el catálogo ya disponibles, el operador puede
+verificar la base de destino y ejecutar desde `backend/`:
+
+```bash
+npm run db:seed:questions
+```
+
+Este comando **escribe en la base configurada** mediante el pool y TLS existentes;
+no se ejecuta al iniciar Express. Durante el desarrollo del commit solo se probó
+contra PostgreSQL temporal, sin ejecutar este comando sobre la base principal.
+
+`002_web_questions.json` contiene una pregunta por lección. El seed busca curso por
+slug y verifica título/posición de unidad y lección; no supone IDs fijos ni crea
+el catálogo. Una transacción con bloqueos comprueba e inserta el conjunto completo.
+Repetirlo conserva preguntas idénticas; ante contenido o posición en conflicto,
+revierte toda la carga sin sobrescribir registros. También valida opciones de 2–6
+textos no vacíos e índice correcto desde cero.
+
+Pruebas específicas con mocks y PostgreSQL temporal aislado, sin cargar `.env`:
+
+```bash
+cd backend
+node --test tests/learning.test.js tests/learning.integration.test.js
+npm test
+```
+
+Cubren validación, JWT y sesiones revocadas, aislamiento, concurrencia con bloqueo
+real, errores seguros, límite de solicitudes, seed idempotente y rollback. Si falta
+PostgreSQL local, las pruebas de integración se señalan como omitidas.
