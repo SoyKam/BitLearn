@@ -1,8 +1,16 @@
 const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError } = require('../services/auth.service');
 const { CatalogUnavailableError } = require('../services/course.service');
 
+const { LearningInputError, LearningNotFoundError, LearningUnavailableError } = require('../services/lesson.service');
+
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+  if (error instanceof LearningInputError) {
+    return res.status(400).json({ success: false, message: 'Identificador o respuesta inválida.' });
+  }
+  if (error instanceof LearningNotFoundError) {
+    return res.status(404).json({ success: false, message: 'Lección o pregunta no encontrada.' });
+  }
   if (error instanceof InvalidSessionError) {
     return res.status(401).json({ success: false, message: 'Sesión no válida.' });
   }
@@ -22,6 +30,9 @@ function errorHandler(error, req, res, next) {
   }));
   if (error instanceof CatalogUnavailableError) {
     return res.status(503).json({ success: false, message: 'El catálogo no está disponible temporalmente.' });
+  }
+  if (error instanceof LearningUnavailableError) {
+    return res.status(503).json({ success: false, message: 'El servicio no está disponible temporalmente.' });
   }
   return res.status(500).json({ success: false, message: 'No se pudo completar la solicitud.' });
 }

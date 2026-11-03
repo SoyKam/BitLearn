@@ -1,0 +1,155 @@
+[
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 1,
+    "lessonTitle": "Estructura básica de HTML",
+    "position": 1,
+    "prompt": "¿Qué elemento contiene el contenido visible de una página HTML?",
+    "options": [
+      "<head>",
+      "<body>",
+      "<title>",
+      "<meta>"
+    ],
+    "correct_option_index": 1,
+    "explanation": "El elemento body contiene el contenido visible del documento."
+  },
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 2,
+    "lessonTitle": "Etiquetas y elementos HTML",
+    "position": 1,
+    "prompt": "¿Qué atributo indica el destino de un enlace a?",
+    "options": [
+      "src",
+      "alt",
+      "href",
+      "name"
+    ],
+    "correct_option_index": 2,
+    "explanation": "href indica la dirección de destino de un enlace."
+  },
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 3,
+    "lessonTitle": "Formularios HTML",
+    "position": 1,
+    "prompt": "¿Qué atributo de label lo vincula con el id de un control?",
+    "options": [
+      "for",
+      "name",
+      "type",
+      "action"
+    ],
+    "correct_option_index": 0,
+    "explanation": "El atributo for debe coincidir con el id del control."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 1,
+    "lessonTitle": "Selectores CSS",
+    "position": 1,
+    "prompt": "¿Qué selector selecciona los elementos de clase aviso?",
+    "options": [
+      "#aviso",
+      "aviso",
+      ".aviso",
+      "*aviso"
+    ],
+    "correct_option_index": 2,
+    "explanation": "El punto seguido del nombre selecciona una clase CSS."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 2,
+    "lessonTitle": "Modelo de caja",
+    "position": 1,
+    "prompt": "¿Qué propiedad crea espacio entre el contenido y el borde?",
+    "options": [
+      "margin",
+      "padding",
+      "display",
+      "color"
+    ],
+    "correct_option_index": 1,
+    "explanation": "padding es el relleno entre el contenido y el borde; margin es espacio exterior."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 3,
+    "lessonTitle": "Flexbox",
+    "position": 1,
+    "prompt": "¿Qué declaración activa Flexbox en un contenedor?",
+    "options": [
+      "position: flex",
+      "flex: display",
+      "display: block",
+      "display: flex"
+    ],
+    "correct_option_index": 3,
+    "explanation": "display: flex convierte el elemento en un contenedor flex para sus hijos directos."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 1,
+    "lessonTitle": "Variables y tipos de datos",
+    "position": 1,
+    "prompt": "¿Qué palabra clave permite declarar una variable que se reasignará?",
+    "options": [
+      "const",
+      "let",
+      "return",
+      "if"
+    ],
+    "correct_option_index": 1,
+    "explanation": "let permite reasignar el valor de la variable."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 2,
+    "lessonTitle": "Condicionales",
+    "position": 1,
+    "prompt": "¿Qué operador compara igualdad sin conversión de tipos?",
+    "options": [
+      "=",
+      "==",
+      "===",
+      "!="
+    ],
+    "correct_option_index": 2,
+    "explanation": "=== compara igualdad sin convertir los tipos de los operandos."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 3,
+    "lessonTitle": "Funciones",
+    "position": 1,
+    "prompt": "¿Qué instrucción devuelve un resultado desde una función?",
+    "options": [
+      "return",
+      "const",
+      "else",
+      "let"
+    ],
+    "correct_option_index": 0,
+    "explanation": "return termina la ejecución de la función y devuelve el valor indicado."
+  }
+]

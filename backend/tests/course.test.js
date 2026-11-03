@@ -143,7 +143,8 @@ test('GET /api/courses en la aplicación real: contrato, seguridad, errores y Sw
   await t.test('Swagger servido por HTTP incluye ambas consultas implementadas y contratos anteriores', async () => {
     const spec = require('../src/config/swagger');
     assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/logout',
-      '/api/auth/me', '/api/auth/refresh', '/api/auth/register', '/api/courses', '/api/courses/{slug}', '/api/health']);
+      '/api/auth/me', '/api/auth/refresh', '/api/auth/register', '/api/courses', '/api/courses/{slug}', '/api/health',
+      '/api/lessons/{id}', '/api/lessons/{id}/answer', '/api/progress']);
     assert.deepEqual(Object.keys(spec.paths['/api/courses']), ['get']);
     const endpoint = spec.paths['/api/courses'].get;
     assert.deepEqual(endpoint.security, []);
