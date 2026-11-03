@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
+import { loginDestination } from './router/auth.guard'
 import { useAuthStore } from './stores/auth.store'
 
 const auth = useAuthStore()
@@ -8,7 +9,7 @@ const route = useRoute()
 const router = useRouter()
 watch(() => auth.status, status => {
   if (route.meta.requiresAuth && (status === 'anonymous' || status === 'unchecked')) {
-    void router.replace({ name: 'login', query: { redirect: '/perfil' } })
+    void router.replace({ name: 'login', query: { redirect: loginDestination(route.path) } })
   }
 })
 </script>

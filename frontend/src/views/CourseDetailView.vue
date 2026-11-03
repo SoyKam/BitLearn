@@ -43,7 +43,7 @@ onUnmounted(() => catalog.clearCourseDetail())
               <p v-if="!unit.lessons.length">Esta unidad todavía no tiene lecciones disponibles.</p>
               <ol v-else class="course-lessons" role="list">
                 <li v-for="lesson in unit.lessons" :key="lesson.id" :value="lesson.position">
-                  <span class="lesson-order">Lección {{ lesson.position }}:</span> {{ lesson.title }}
+                  <RouterLink :to="{ name: 'lesson', params: { id: lesson.id } }"><span class="lesson-order">Lección {{ lesson.position }}:</span> {{ lesson.title }}</RouterLink>
                 </li>
               </ol>
             </article>
