@@ -151,6 +151,7 @@ test('migraciones en PostgreSQL temporal aislado', {
       'Omitida (ya aplicada): 001_create_users.sql',
       'Omitida (ya aplicada): 002_create_learning_structure.sql',
       'Omitida (ya aplicada): 003_create_auth_sessions.sql',
+      'Omitida (ya aplicada): 004_create_learning_progress.sql',
     ]);
   });
 
@@ -458,7 +459,7 @@ test('migraciones en PostgreSQL temporal aislado', {
     await pool.query('ALTER TABLE users ADD COLUMN optional_extra TEXT');
     await runMigrations(pool, silent);
     assert.deepEqual((await pool.query('SELECT version FROM schema_migrations ORDER BY version')).rows,
-      [{ version: '1' }, { version: '2' }, { version: '3' }]);
+      [{ version: '1' }, { version: '2' }, { version: '3' }, { version: '4' }]);
   });
 
   await t.test('dos migradores concurrentes aplican cada versión una sola vez', async (context) => {
@@ -514,7 +515,7 @@ test('migraciones en PostgreSQL temporal aislado', {
     }
     const applied = runCli(pool.options.database);
     const skipped = runCli(pool.options.database);
-    for (const name of ['001_create_users.sql', '002_create_learning_structure.sql', '003_create_auth_sessions.sql']) {
+    for (const name of ['001_create_users.sql', '002_create_learning_structure.sql', '003_create_auth_sessions.sql', '004_create_learning_progress.sql']) {
       assert.ok(applied.includes(`Aplicada: ${name}`));
       assert.ok(skipped.includes(`Omitida (ya aplicada): ${name}`));
     }

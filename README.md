@@ -93,3 +93,52 @@ npm test
 
 La matriz de cobertura, resultados automatizados, corrección mínima y pendientes
 manuales del commit 19 están en el [informe de cierre de semana 3](docs/verificacion-semana-3.md).
+
+## Persistencia de aprendizaje (migración 004)
+
+`004_create_learning_progress.sql` prepara RF-03 a RF-10; no implementa SM-2,
+retención, endpoints ni carga preguntas o tarjetas. Agrega:
+
+- `questions`: preguntas por lección, opciones JSONB (arreglo de 2–6), índice
+  correcto desde cero y explicación opcional.
+- `user_lesson_progress`: intentos, aciertos y finalización por usuario/lección.
+- `flashcards`: frente y reverso compartidos, ordenados dentro de cada lección.
+- `user_card_progress`: estado independiente por usuario/tarjeta; repeticiones e
+  intervalo iniciales en cero, factor inicial 2.5000, último repaso nulo y próximo
+  repaso inicialmente en la fecha de creación.
+- `card_reviews`: calificación 0–5, factores e intervalos antes/después, fecha del
+  repaso y próxima fecha resultante; FK compuesta al estado usuario/tarjeta.
+
+Las PK compuestas impiden duplicar progreso. Las posiciones son positivas y únicas
+por lección; los textos obligatorios no admiten solo espacios. CHECK limita
+contadores, aciertos, factores (mínimo 1.3000, sin NaN) y fechas finitas TIMESTAMPTZ.
+Todas las FK usan ON DELETE RESTRICT, evitando borrar padres con dependencias.
+Los índices `(user_id, next_review_at)` y `(user_id, reviewed_at DESC)` preparan
+pendientes e historial. `UNIQUE(user_id, request_id)` con UUID obligatorio evita
+repetir una operación, incluso entre tarjetas del mismo usuario; el servicio futuro
+seguirá siendo responsable de devolver la respuesta coherente de una repetición.
+
+Convención futura: aplicar el mínimo 1.3 y redondear el factor a cuatro decimales,
+al más cercano y con empates alejándose de cero (para factores positivos, hacia
+arriba), antes de persistir y reutilizarlo. NUMERIC(8,4) tiene máximo 9999.9999:
+el servicio deberá validar resultados representables, sin truncarlos silenciosamente.
+`pg` devuelve estos decimales como cadenas. El servicio actualizará estado e
+historial en una transacción con bloqueo de fila y actualizará `updated_at`
+explícitamente; no hay triggers ni cálculo algorítmico SQL.
+
+El commit #21 deberá validar cada alternativa mediante Zod, obtener el usuario
+del JWT validado, comprobar propiedad y ocultar la respuesta correcta hasta que
+el estudiante responda. Las claves separan registros; no sustituyen autorización.
+
+Pruebas sin acceder a la base principal (requieren PostgreSQL local):
+
+```bash
+cd backend
+node --test tests/learning-migrations.integration.test.js
+npm test
+```
+
+Usan el helper de PostgreSQL temporal y no cargan la conexión real. Cubren rollback,
+repetición, concurrencia e integridad; la suite completa incluye autenticación y
+catálogo. **`npm run db:migrate` modifica el esquema de la base configurada**:
+no ejecutarlo sobre `bitlearn` sin autorización explícita.
