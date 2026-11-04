@@ -15,6 +15,28 @@ function replay(review, input) {
 
 function createReviewService(repository) {
   return {
+    async due(userId, { limit = 50 } = {}) {
+      const rows = await repository.findDue(userId, limit);
+      return rows.map(row => ({
+        flashcardId: row.flashcard_id, lessonId: row.lesson_id, lessonTitle: row.lesson_title,
+        courseSlug: row.course_slug, front: row.front, back: row.back,
+        status: row.progress_id === null ? 'new' : 'due',
+        repetitions: row.progress_id === null ? 0 : row.repetitions,
+        easeFactor: row.progress_id === null ? 2.5 : row.ease_factor,
+        intervalDays: row.progress_id === null ? 0 : row.interval_days,
+        lastReviewAt: row.last_review_at, nextReviewAt: row.next_review_at,
+      }));
+    },
+    async history(userId, { limit = 20, offset = 0 } = {}) {
+      const { items, total } = await repository.findHistory(userId, limit, offset);
+      return { items: items.map(row => ({
+        reviewId: row.id, flashcardId: row.flashcard_id, courseSlug: row.course_slug,
+        lessonTitle: row.lesson_title, front: row.front, quality: row.quality,
+        reviewedAt: row.reviewed_at, easeFactorBefore: row.ease_factor_before,
+        easeFactorAfter: row.ease_factor_after, intervalBeforeDays: row.interval_before_days,
+        intervalAfterDays: row.interval_after_days, nextReviewAt: row.next_review_at,
+      })), total, limit, offset };
+    },
     async record(userId, input) {
       return repository.record(userId, input, async (tx) => {
         let original = await tx.findReview();
