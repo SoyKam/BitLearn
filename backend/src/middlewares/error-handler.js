@@ -1,3 +1,4 @@
+const { ReviewNotFoundError, ReviewForbiddenError, ReviewConflictError, ReviewNotDueError, ReviewsUnavailableError } = require('../services/review.service');
 const { FlashcardsUnavailableError } = require('../services/flashcard.service');
 const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError } = require('../services/auth.service');
 const { CatalogUnavailableError } = require('../services/course.service');
@@ -6,6 +7,15 @@ const { LearningInputError, LearningNotFoundError, LearningUnavailableError } = 
 
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+  const reviewErrors = [
+    [ReviewNotFoundError, 404, 'Flashcard no encontrada.'],
+    [ReviewForbiddenError, 403, 'Debes completar la lección antes de activar la tarjeta.'],
+    [ReviewConflictError, 409, 'requestId ya utilizado con otros datos.'],
+    [ReviewNotDueError, 409, 'La tarjeta todavía no está pendiente.'],
+  ];
+  for (const [type, status, message] of reviewErrors) {
+    if (error instanceof type) return res.status(status).json({ success: false, message });
+  }
   if (error instanceof LearningInputError) {
     return res.status(400).json({ success: false, message: 'Identificador o respuesta inválida.' });
   }
@@ -32,7 +42,7 @@ function errorHandler(error, req, res, next) {
   if (error instanceof CatalogUnavailableError) {
     return res.status(503).json({ success: false, message: 'El catálogo no está disponible temporalmente.' });
   }
-  if (error instanceof LearningUnavailableError || error instanceof FlashcardsUnavailableError) {
+  if (error instanceof ReviewsUnavailableError || error instanceof LearningUnavailableError || error instanceof FlashcardsUnavailableError) {
     return res.status(503).json({ success: false, message: 'El servicio no está disponible temporalmente.' });
   }
   return res.status(500).json({ success: false, message: 'No se pudo completar la solicitud.' });

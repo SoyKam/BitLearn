@@ -15,7 +15,7 @@ El proyecto contempla seguimiento del progreso, repasos personalizados y una est
 El motor de dominio SM-2 del commit #23 está implementado y se prueba sin base
 de datos con `cd backend && node --test tests/sm2.test.js`. Su contrato, fórmula,
 precisión y variante están en [Algoritmo SM-2](docs/algoritmo-sm2.md).
-La integración con servicios de repasos y persistencia queda pendiente.
+El commit #25 integra el motor con el registro autenticado y transaccional de repasos.
 
 ## Verificar PostgreSQL
 
@@ -253,3 +253,96 @@ y RF-10 no se implementan aquí. Se mantienen intactos el motor y el frontend.
 Pruebas desde `backend/`: `node --test tests/flashcards.test.js tests/flashcards.integration.test.js`
 y `npm test`. La integración usa exclusivamente PostgreSQL temporal por socket
 privado; se omite explícitamente si no están disponibles sus binarios.
+
+
+## Registro transaccional de repasos (commit #25)
+
+`POST /api/reviews` requiere `Authorization: Bearer <accessToken>` y sesión activa.
+Recibe exclusivamente este JSON (IDs ilustrativos):
+
+```json
+{
+  "flashcardId": 5,
+  "quality": 4,
+  "requestId": "123e4567-e89b-42d3-a456-426614174000"
+}
+```
+
+Zod exige un ID entero positivo hasta 2147483647, calidad entera 0–5 y UUID v4.
+Las calificaciones significan: 0 nada, 1 muy poco, 2 insuficiente, 3 con dificultad,
+4 correcto y 5 fácil. No admite cadenas numéricas ni propiedades adicionales;
+`userId`, fechas y valores SM-2 proceden del servidor. El JSON está limitado a 4 KiB.
+
+La primera operación activa una tarjeta únicamente si el estudiante completó su
+lección (`completed_at`). Usa `createInitialSm2State()` y crea estado solo para esa
+pareja usuario/tarjeta. Una vez activada, conserva su estado individual y admite
+nuevas operaciones únicamente cuando `next_review_at <= reviewedAt`. Los reenvíos
+idempotentes se resuelven antes de comprobar el vencimiento. No se modifica la
+lección ni el contenido compartido.
+
+El repositorio lee el estado bajo bloqueo y valida y convierte NUMERIC a número sin
+redondear datos corruptos. El servicio invoca `calculateSm2` sin cambiar su fórmula:
+actualiza repeticiones, factor e intervalo y calcula la próxima fecha. Un único
+instante de PostgreSQL, obtenido después de los bloqueos, sirve para comprobar
+vencimiento, calcular y registrar el repaso. Las fechas HTTP son ISO 8601 UTC;
+el reloj es inyectable en pruebas, nunca mediante el JSON de producción.
+
+Un solo cliente ejecuta `BEGIN ISOLATION LEVEL READ COMMITTED`, toma
+`pg_advisory_xact_lock(user_id, flashcard_id)` y lee la fila con `FOR UPDATE`.
+El advisory protege también el primer estado, cuando no existe ninguna fila que
+bloquear. Las consultas posteriores a la espera obtienen una nueva instantánea;
+tarjetas diferentes no comparten este bloqueo. Estado e historial (calidad,
+factores e intervalos antes/después y fechas) se escriben juntos y la respuesta
+solo se devuelve después de `COMMIT`. Ante fallos se ejecuta `ROLLBACK`; si falla
+o el resultado de COMMIT queda incierto, se descarta la conexión.
+
+`UNIQUE(user_id, request_id)` garantiza la idempotencia incluso en carreras entre
+tarjetas distintas. Un reenvío idéntico recupera los valores del historial original
+con `replayed: true`, sin ejecutar SM-2 ni modificar estado. Otra calidad o tarjeta
+con la misma clave devuelve 409. Ante esa restricción concreta se revierte la
+transacción perdedora y se consulta la operación confirmada desde un cliente nuevo.
+Otros errores de unicidad no se ocultan. Si se pierde la respuesta de COMMIT, el
+cliente puede recuperar el resultado reenviando exactamente el mismo `requestId`.
+
+La respuesta es `{ success: true, data: { reviewId, flashcardId, quality, easeFactor,
+intervalDays, reviewedAt, nextReviewAt, replayed } }`. `reviewId` es cadena BIGSERIAL.
+No incluye `repetitions`: se persiste, pero el historial no permite reconstruir ese
+contador para una operación antigua. Todas las respuestas de esta ruta incluyen
+`Cache-Control: no-store` y `x-correlation-id`, sin SQL, tokens ni detalles privados.
+
+| HTTP | Significado |
+| --- | --- |
+| 200 | Repaso confirmado o resultado histórico reproducido |
+| 400 | Entrada inválida, JSON malformado o mayor de 4 KiB |
+| 401 | JWT ausente, inválido, expirado o sesión revocada/inactiva |
+| 403 | Lección no completada antes de activar la tarjeta |
+| 404 | Flashcard inexistente |
+| 409 | Clave reutilizada con otros datos o tarjeta aún no pendiente |
+| 429 | Límite de solicitudes alcanzado |
+| 500 | Error interno, integridad o estado SM-2 inválido, sin detalles técnicos |
+| 503 | Indisponibilidad identificable de PostgreSQL |
+
+El límite es de 60 intentos por IP cada 15 minutos (IPv6 /56), en memoria por
+proceso: se reinicia con el proceso y no se comparte entre réplicas. Se conserva
+`trust proxy=false`; detrás de un proxy no confiable los clientes comparten cuota.
+El contrato completo está en Swagger `/api-docs`.
+
+Verificación desde `backend/`:
+
+```bash
+node --test tests/reviews.test.js
+node --test tests/reviews.integration.test.js
+npm test
+```
+
+Las integraciones usan exclusivamente clústeres PostgreSQL temporales por socket
+privado, migraciones 001–004 y seeds aislados; nunca cargan la conexión real ni
+`.env`. Si faltan los binarios locales, se indican explícitamente como omitidas.
+
+Este avance integra RF-06 y aporta programación a RF-07 y almacenamiento a RF-08,
+además de autorización/validación (RNF-05), transacciones/concurrencia (RNF-06),
+separación de capas (RNF-03) y contrato/pruebas (RNF-08). No completa todos esos
+requisitos. El historial ya se almacena, pero todavía no tiene endpoint público.
+Para el commit #26 quedan las consultas de pendientes e historial, con la misma
+política de activación y vencimiento. No se implementan vistas Vue de calificación,
+retención estimada ni dashboard.

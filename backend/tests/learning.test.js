@@ -154,5 +154,5 @@ test('Swagger: tres endpoints, contratos cerrados, errores, Bearer y privacidad'
   assert.equal(spec.components.schemas.LessonAnswer.additionalProperties, false);
   assert.deepEqual(spec.components.schemas.LessonAnswer.required, ['questionId', 'optionIndex']);
   assert.deepEqual(Object.keys(spec.components.schemas.LessonQuestion.properties), ['id', 'prompt', 'options']);
-  assert.doesNotMatch(JSON.stringify(spec.paths), /\/api\/(reviews|dashboard)/);
+  assert.doesNotMatch(JSON.stringify(spec.paths), /\/api\/(reviews\/(due|history)|dashboard)/);
 });
