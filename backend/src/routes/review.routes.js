@@ -2,6 +2,293 @@
  * @swagger
  * components:
  *   schemas:
+ *     DueReview:
+ *       type: object
+ *       additionalProperties: false
+ *       required: [flashcardId, lessonId, lessonTitle, courseSlug, front, back, status, repetitions, easeFactor, intervalDays, lastReviewAt, nextReviewAt]
+ *       properties:
+ *         flashcardId:
+ *           type: integer
+ *         lessonId:
+ *           type: integer
+ *         lessonTitle:
+ *           type: string
+ *         courseSlug:
+ *           type: string
+ *         front:
+ *           type: string
+ *         back:
+ *           type: string
+ *         status:
+ *           type: string
+ *           enum: [new, due]
+ *         repetitions:
+ *           type: integer
+ *         easeFactor:
+ *           type: number
+ *         intervalDays:
+ *           type: integer
+ *         lastReviewAt:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *         nextReviewAt:
+ *           type: string
+ *           format: date-time
+ *           nullable: true
+ *     ReviewHistoryItem:
+ *       type: object
+ *       additionalProperties: false
+ *       required: [reviewId, flashcardId, courseSlug, lessonTitle, front, quality, reviewedAt, easeFactorBefore, easeFactorAfter, intervalBeforeDays, intervalAfterDays, nextReviewAt]
+ *       properties:
+ *         reviewId:
+ *           type: string
+ *         flashcardId:
+ *           type: integer
+ *         courseSlug:
+ *           type: string
+ *         lessonTitle:
+ *           type: string
+ *         front:
+ *           type: string
+ *         quality:
+ *           type: integer
+ *         reviewedAt:
+ *           type: string
+ *           format: date-time
+ *         easeFactorBefore:
+ *           type: number
+ *         easeFactorAfter:
+ *           type: number
+ *         intervalBeforeDays:
+ *           type: integer
+ *         intervalAfterDays:
+ *           type: integer
+ *         nextReviewAt:
+ *           type: string
+ *           format: date-time
+ * /api/reviews/due:
+ *   get:
+ *     summary: Consultar repasos pendientes
+ *     description: Tarjetas vencidas primero por fecha ascendente; después nuevas de lecciones completadas sin estado. Desempate por curso, unidad, lección, posición e ID. new representa 0 repeticiones, factor 2.5, intervalo 0 y fechas null sin insertar estado. due devuelve estado persistido cuya fecha es menor o igual al instante de PostgreSQL. No ejecuta SM-2. Solo admite los parámetros documentados una vez; rechaza userId y parámetros desconocidos.
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         description: Entero decimal sin signo, espacios, fracciones ni exponentes.
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *     responses:
+ *       200:
+ *         description: Consulta exitosa; sin registros devuelve data [] en pendientes o items [], total 0 en historial. Una página fuera de rango conserva el total real.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: false
+ *               required: [success, data]
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   enum: [true]
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/DueReview'
+ *       400:
+ *         description: Parámetros inválidos, repetidos o desconocidos.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ *       401:
+ *         description: JWT ausente, inválido o expirado; sesión revocada o inactiva.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ *       500:
+ *         description: Error interno sin información sensible.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ *       503:
+ *         description: PostgreSQL temporalmente no disponible.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ * /api/reviews/history:
+ *   get:
+ *     summary: Consultar historial personal
+ *     description: Historial propio ordenado por reviewed_at DESC e id DESC. Total independiente de la página y obtenido en la misma instantánea. Nuevos repasos pueden desplazar páginas entre solicitudes; offset no garantiza una instantánea inmutable. No recalcula SM-2. Solo admite los parámetros documentados una vez; rechaza userId y parámetros desconocidos.
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         description: Entero decimal sin signo, espacios, fracciones ni exponentes.
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         description: Entero decimal sin signo, espacios, fracciones ni exponentes.
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 10000
+ *           default: 0
+ *     responses:
+ *       200:
+ *         description: Consulta exitosa; sin registros devuelve data [] en pendientes o items [], total 0 en historial. Una página fuera de rango conserva el total real.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               additionalProperties: false
+ *               required: [success, data]
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   enum: [true]
+ *                 data:
+ *                   type: object
+ *                   additionalProperties: false
+ *                   required: [items, total, limit, offset]
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/ReviewHistoryItem'
+ *                     total:
+ *                       type: integer
+ *                       minimum: 0
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *       400:
+ *         description: Parámetros inválidos, repetidos o desconocidos.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ *       401:
+ *         description: JWT ausente, inválido o expirado; sesión revocada o inactiva.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ *       500:
+ *         description: Error interno sin información sensible.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ *       503:
+ *         description: PostgreSQL temporalmente no disponible.
+ *         headers:
+ *           Cache-Control:
+ *             schema:
+ *               type: string
+ *               enum: [no-store]
+ *           x-correlation-id:
+ *             schema:
+ *               type: string
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CatalogError'
+ */
+/**
+ * @swagger
+ * components:
+ *   schemas:
  *     ReviewInput:
  *       type: object
  *       additionalProperties: false
@@ -213,10 +500,30 @@ const schema = z.strictObject({
   quality: z.number().int().min(0).max(5),
   requestId: z.uuidv4(),
 });
+const decimal = (min, max, fallback) => z.string().regex(/^[0-9]+$/)
+  .transform(Number).pipe(z.number().int().min(min).max(max)).default(fallback);
+const dueQuery = z.strictObject({ limit: decimal(1, 100, 50) });
+const historyQuery = z.strictObject({ limit: decimal(1, 100, 20), offset: decimal(0, 10000, 0) });
+function validateQuery(schema) {
+  return (req, res, next) => {
+    // Leer la URL conserva repeticiones incluso si cambia el parser de Express.
+    const params = new URLSearchParams(req.originalUrl.split('?')[1] || '');
+    const repeated = [...params.keys()].some(key => params.getAll(key).length !== 1);
+    const parsed = schema.safeParse(Object.fromEntries(params));
+    if (repeated || !parsed.success) {
+      return res.status(400).json({ success: false, message: 'Parámetros de consulta inválidos.' });
+    }
+    req.reviewQuery = parsed.data;
+    next();
+  };
+}
 function createReviewRouter(service, authService) {
   const router = Router();
   router.use(requestContext);
   router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  const controller = createController(service);
+  router.get('/due', createAuthenticate(authService), validateQuery(dueQuery), controller.due);
+  router.get('/history', createAuthenticate(authService), validateQuery(historyQuery), controller.history);
   router.post('/', createRateLimit({ limit: 60, action: 'repaso' }), createAuthenticate(authService),
     json({ limit: '4kb', inflate: false }), (req, res, next) => {
       const parsed = schema.safeParse(req.body);

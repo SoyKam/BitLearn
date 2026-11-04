@@ -29,6 +29,56 @@ function createReviewRepository(pool, { clock } = {}) {
     FROM public.card_reviews WHERE user_id = $1 AND request_id = $2`, [userId, requestId])).rows[0]);
 
   return {
+    async findDue(userId, limit) {
+      // statement_timestamp es estable durante la sentencia y procede de PostgreSQL.
+      const { rows } = await pool.query(`
+        SELECT f.id AS flashcard_id, f.lesson_id, l.title AS lesson_title,
+          c.slug AS course_slug, f.front, f.back, p.flashcard_id AS progress_id,
+          p.repetitions, p.ease_factor, p.interval_days, p.last_review_at, p.next_review_at
+        FROM public.flashcards f
+        JOIN public.lessons l ON l.id = f.lesson_id
+        JOIN public.units u ON u.id = l.unit_id
+        JOIN public.courses c ON c.id = u.course_id
+        LEFT JOIN public.user_card_progress p ON p.flashcard_id = f.id AND p.user_id = $1
+        LEFT JOIN public.user_lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
+        WHERE (p.flashcard_id IS NULL AND lp.completed_at IS NOT NULL)
+           OR p.next_review_at <= COALESCE($3::timestamptz, statement_timestamp())
+        ORDER BY p.next_review_at ASC NULLS LAST, c.slug, u.position, l.position, f.position, f.id
+        LIMIT $2`, [userId, limit, clock ? date(await clock()) : null]);
+      return rows.map(row => ({ ...row,
+        ease_factor: row.progress_id === null ? null : factor(row.ease_factor),
+        last_review_at: row.last_review_at === null ? null : date(row.last_review_at).toISOString(),
+        next_review_at: row.next_review_at === null ? null : date(row.next_review_at).toISOString(),
+      }));
+    },
+    async findHistory(userId, limit, offset) {
+      // Total y página comparten instantánea; LEFT JOIN conserva total fuera de página.
+      const { rows } = await pool.query(`
+        SELECT totals.total, page.*
+        FROM (SELECT count(*) AS total FROM public.card_reviews WHERE user_id = $1) totals
+        LEFT JOIN LATERAL (
+          SELECT r.id, r.flashcard_id, c.slug AS course_slug, l.title AS lesson_title,
+            f.front, r.quality, r.reviewed_at, r.ease_factor_before, r.ease_factor_after,
+            r.interval_before_days, r.interval_after_days, r.next_review_at
+          FROM public.card_reviews r
+          JOIN public.flashcards f ON f.id = r.flashcard_id
+          JOIN public.lessons l ON l.id = f.lesson_id
+          JOIN public.units u ON u.id = l.unit_id
+          JOIN public.courses c ON c.id = u.course_id
+          WHERE r.user_id = $1
+          ORDER BY r.reviewed_at DESC, r.id DESC
+          LIMIT $2 OFFSET $3
+        ) page ON true
+        ORDER BY page.reviewed_at DESC, page.id DESC`, [userId, limit, offset]);
+      const total = Number(rows[0].total);
+      if (!Number.isSafeInteger(total) || total < 0) throw new Error('Total inválido');
+      return { total, items: rows.filter(row => row.id !== null).map(row => {
+        if (typeof row.id !== 'string' || !/^[1-9][0-9]*$/.test(row.id)) throw new Error('BIGSERIAL inválido');
+        return { ...row, ease_factor_before: factor(row.ease_factor_before),
+          ease_factor_after: factor(row.ease_factor_after),
+          reviewed_at: date(row.reviewed_at).toISOString(), next_review_at: date(row.next_review_at).toISOString() };
+      }) };
+    },
     async record(userId, input, work, recover) {
       let client;
       let releaseError;

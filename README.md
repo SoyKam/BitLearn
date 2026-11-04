@@ -346,3 +346,50 @@ requisitos. El historial ya se almacena, pero todavía no tiene endpoint públic
 Para el commit #26 quedan las consultas de pendientes e historial, con la misma
 política de activación y vencimiento. No se implementan vistas Vue de calificación,
 retención estimada ni dashboard.
+
+## Consultas personales de repasos (commit #26)
+
+- `GET /api/reviews/due?limit=50`: devuelve `{ success: true, data: [...] }`.
+  Incluye tarjetas **new** de lecciones con `completed_at` y sin estado del usuario:
+  repeticiones 0, factor 2.5, intervalo 0 y fechas null, sin crear filas.
+  Incluye tarjetas **due** con estado y `next_review_at <= statement_timestamp()`
+  de PostgreSQL, aunque ya no exista finalización de la lección. Devuelve su estado
+  real, frente, reverso, lección y curso. Ordena vencidas por fecha más antigua,
+  después nuevas; desempata por slug de curso, posición de unidad, lección,
+  tarjeta e identificador. `limit` predeterminado 50, rango 1–100, aplicado en SQL.
+- `GET /api/reviews/history?limit=20&offset=0`: devuelve
+  `{ success: true, data: { items: [...], total, limit, offset } }`.
+  Consulta resultados confirmados en `card_reviews`, por `reviewed_at DESC, id DESC`,
+  con calidad, factores e intervalos anteriores/posteriores y fechas persistidas.
+  `reviewId` es cadena para conservar BIGSERIAL; factores NUMERIC validados y
+  normalizados a número, fechas ISO 8601 UTC. `limit` predeterminado 20 (1–100);
+  `offset` predeterminado 0 (0–10000). Total y página comparten una sentencia y su
+  instantánea; el total se conserva incluso si offset supera la cantidad de filas.
+  Nuevos repasos pueden desplazar páginas entre solicitudes: no es una instantánea
+  histórica inmutable.
+
+Ambas rutas exigen Bearer JWT y sesión activa; filtran exclusivamente por
+`req.auth.userId` mediante parámetros SQL. Zod admite solo enteros decimales sin
+signos, espacios, fracciones ni exponentes. Rechaza valores fuera de rango,
+parámetros repetidos/desconocidos y `userId` con 400. Colecciones vacías son 200:
+`data: []` o `data: { items: [], total: 0, limit: 20, offset: 0 }`.
+JWT/sesión inválidos producen 401; errores internos 500 e indisponibilidad
+identificable de PostgreSQL 503, sin SQL ni secretos. Todas las respuestas conservan
+`Cache-Control: no-store` y `x-correlation-id`. Swagger detalla los campos en `/api-docs`.
+
+Los GET solo ejecutan SELECT, sin crear progreso, cambiar fechas ni ejecutar SM-2.
+El POST existente conserva transacciones, bloqueos e idempotencia: tras confirmar
+un repaso con fecha futura, la tarjeta desaparece de pendientes y el historial
+incorpora el resultado sin alterar repasos anteriores. No hay cambios de frontend,
+retención ni dashboard. Se atienden RF-07/RF-08 y RNF-05/RNF-06, reutilizando RF-06.
+La interfaz que consuma este flujo queda pendiente de definir para el commit #27.
+
+Pruebas aisladas desde `backend/`:
+
+```bash
+node --test tests/reviews-query.test.js tests/reviews-query.integration.test.js
+npm test
+```
+
+La integración utiliza exclusivamente PostgreSQL temporal, incluyendo verificaciones
+con transacciones de solo lectura y comparación de datos antes/después de los GET.
