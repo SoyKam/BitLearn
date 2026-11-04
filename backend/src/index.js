@@ -14,6 +14,9 @@ const createTokenService = require('./services/token.service');
 const createCourseRepository = require('./repositories/course.repository');
 const { createCourseService } = require('./services/course.service');
 const createCourseRouter = require('./routes/course.routes');
+const createFlashcardRepository = require('./repositories/flashcard.repository');
+const { createFlashcardService } = require('./services/flashcard.service');
+const createFlashcardRouter = require('./routes/flashcard.routes');
 
 const createLessonRepository = require('./repositories/lesson.repository');
 const createProgressRepository = require('./repositories/progress.repository');
@@ -41,6 +44,8 @@ app.use('/api/lessons', createLessonRouter(
   createLessonService(createLessonRepository(pool), progressRepository), authService));
 app.use('/api/progress', createProgressRouter(createProgressService(progressRepository), authService));
 app.use('/api/courses', createCourseRouter(createCourseService(createCourseRepository(pool))));
+
+app.use('/api/flashcards', createFlashcardRouter(createFlashcardService(createFlashcardRepository(pool))));
 
 app.get('/', (req, res) => {
   res.json({ message: 'API corriendo', docs: '/api-docs' });
