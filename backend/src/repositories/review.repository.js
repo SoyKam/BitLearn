@@ -1,3 +1,4 @@
+const dueCondition = require('./review-eligibility');
 const isPostgresUnavailable = require('../config/postgres-errors');
 const { ReviewsUnavailableError } = require('../services/review.service');
 
@@ -41,8 +42,7 @@ function createReviewRepository(pool, { clock } = {}) {
         JOIN public.courses c ON c.id = u.course_id
         LEFT JOIN public.user_card_progress p ON p.flashcard_id = f.id AND p.user_id = $1
         LEFT JOIN public.user_lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = $1
-        WHERE (p.flashcard_id IS NULL AND lp.completed_at IS NOT NULL)
-           OR p.next_review_at <= COALESCE($3::timestamptz, statement_timestamp())
+        WHERE ${dueCondition('COALESCE($3::timestamptz, statement_timestamp())')}
         ORDER BY p.next_review_at ASC NULLS LAST, c.slug, u.position, l.position, f.position, f.id
         LIMIT $2`, [userId, limit, clock ? date(await clock()) : null]);
       return rows.map(row => ({ ...row,

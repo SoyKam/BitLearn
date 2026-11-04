@@ -154,8 +154,8 @@ test('Swagger: tres endpoints, contratos cerrados, errores, Bearer y privacidad'
   assert.equal(spec.components.schemas.LessonAnswer.additionalProperties, false);
   assert.deepEqual(spec.components.schemas.LessonAnswer.required, ['questionId', 'optionIndex']);
   assert.deepEqual(Object.keys(spec.components.schemas.LessonQuestion.properties), ['id', 'prompt', 'options']);
-  // Commit #26 implementa las consultas; dashboard sigue fuera de alcance.
+  // Las consultas de repasos y dashboard conservan los contratos de aprendizaje.
   assert.ok(spec.paths['/api/reviews/due'].get);
   assert.ok(spec.paths['/api/reviews/history'].get);
-  assert.doesNotMatch(JSON.stringify(spec.paths), /\/api\/dashboard/);
+  assert.ok(spec.paths['/api/dashboard'].get);
 });
