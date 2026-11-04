@@ -455,3 +455,21 @@ No es necesario ejecutar migraciones ni seeds sobre la base principal para este 
 Este avance aporta el backend de RF-09 y reutiliza RF-04, RF-05, RF-07 y RF-08.
 **RF-09 todavía no está integrado visualmente en Vue.** El commit #29 queda dedicado
 a RF-10, la proyección estimada de retención, que este endpoint no calcula.
+
+## Dashboard y retención estimada (commit #29)
+
+Con una sesión activa, abre `/dashboard`, también enlazado desde perfil, progreso
+y repasos. Muestra estadísticas reales de `GET /api/dashboard` y una curva con
+tabla accesible de `GET /api/dashboard/retention`. El botón Actualizar consulta
+nuevamente ambos endpoints. Sin repasos registrados no se inventa una estimación.
+
+El [modelo de retención estimada](docs/retencion-estimada.md) utiliza los intervalos
+SM-2 persistidos, sin modificarlos. Es una proyección matemática sin nuevos repasos,
+no una medición real ni calibrada individualmente. RF-09 queda integrado en Vue
+y RF-10 agrega la estimación explícita. Para la siguiente etapa queda la auditoría
+de integración y requisitos transversales del Core prevista para la semana 8;
+este cambio no define funcionalidades adicionales para el commit #30.
+
+Pruebas nuevas: `backend/tests/retention*.test.js` (dominio sin DB e integración
+con PostgreSQL temporal) y `frontend/tests/dashboard*.test.js` (contratos, sesión,
+estado y navegador con mocks). No requieren migraciones ni seeds en la base real.

@@ -33,6 +33,7 @@ async function logout() {
       <button class="button primary" type="button" :disabled="auth.loading" @click="logout">Cerrar sesión</button>
       <RouterLink to="/mi-progreso">Mi progreso</RouterLink>
       <RouterLink to="/repasos">Mis repasos</RouterLink>
+      <RouterLink to="/dashboard">Mi dashboard</RouterLink>
       <RouterLink to="/cursos">Explorar cursos</RouterLink>
       <RouterLink to="/">Regresar al inicio</RouterLink>
     </nav>

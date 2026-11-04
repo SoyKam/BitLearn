@@ -1,3 +1,4 @@
+const { projectRetention } = require('../domain/retention');
 class DashboardUnavailableError extends Error {}
 
 function count(value) {
@@ -17,6 +18,21 @@ function progress(total, completed) {
 }
 function createDashboardService(repository) {
   return {
+    async getRetention(userId) {
+      const rows = await repository.findRetentionByUser(userId);
+      const asOf = rows[0].as_of;
+      const states = rows.filter(row => row.last_review_at !== null).map(row => ({
+        intervalDays: row.interval_days, lastReviewAt: row.last_review_at,
+      }));
+      const projection = projectRetention(states, asOf);
+      const points = projection.points.map(point => ({ daysAhead: point.daysAhead,
+        estimatedRetentionPercent: Math.round(point.retention * 10000) / 100 }));
+      const future = rows.filter(row => row.last_review_at !== null && row.next_review_at > asOf)
+        .map(row => row.next_review_at.getTime());
+      return { asOf: asOf.toISOString(), modeledCards: projection.modeledCards,
+        averageRetentionNowPercent: points[0]?.estimatedRetentionPercent ?? null,
+        nextScheduledReviewAt: future.length ? new Date(Math.min(...future)).toISOString() : null, points };
+    },
     async get(userId) {
       const rows = await repository.findByUser(userId);
       const first = rows[0];

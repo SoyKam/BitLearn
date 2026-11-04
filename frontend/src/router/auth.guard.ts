@@ -7,7 +7,7 @@ declare module 'vue-router' {
 
 // Lista cerrada de destinos: no aceptar URLs externas, esquemas ni rutas arbitrarias.
 export function loginDestination(value: unknown): string {
-  if (value === '/repasos' || value === '/perfil' || value === '/mi-progreso') return value
+  if (value === '/dashboard' || value === '/repasos' || value === '/perfil' || value === '/mi-progreso') return value
   if (typeof value === 'string' && /^\/lecciones\/[0-9]{1,10}$/.test(value) && !/\s/u.test(value)) {
     const id = Number(value.slice('/lecciones/'.length))
     if (id > 0 && id <= 2147483647) return `/lecciones/${id}`

@@ -211,3 +211,13 @@ button:disabled { cursor: wait; }
 .reviews-page summary { cursor: pointer; padding-block: 0.5rem; }
 .reviews-page summary:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
 @media (max-width: 380px) { .review-grades { grid-template-columns: minmax(0, 1fr); } }
+
+.dashboard-page { display: grid; gap: 1.5rem; }
+.dashboard-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 0; }
+.dashboard-stats > div { background: white; border-top: 4px solid var(--accent); border-radius: .5rem; padding: 1rem; }
+.dashboard-stats dd { margin: .5rem 0 0; font-size: 1.6rem; font-weight: 700; }
+.dashboard-page progress { display: block; width: 100%; accent-color: #a34000; }
+.retention-chart { width: 100%; height: auto; margin-top: 1rem; }
+.retention-chart text { fill: currentColor; font-size: 14px; }
+.retention-table { width: 100%; border-collapse: collapse; }
+.retention-table th, .retention-table td { text-align: left; padding: .5rem; border-bottom: 1px solid #777; }

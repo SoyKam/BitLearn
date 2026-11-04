@@ -1,5 +1,72 @@
 /**
  * @swagger
+ * /api/dashboard/retention:
+ *   get:
+ *     tags: [Dashboard]
+ *     summary: Proyección matemática estimada de retención
+ *     description: "Solo lectura, sin parámetros ni cuerpo. R(t)=exp(-t/S), S=max(1,I)/ln(2); t son días desde el último repaso e I el intervalo SM-2 almacenado. El 50 % al final del intervalo es ilustrativo, no validado ni calibrado individualmente. Promedio simple sin nuevos repasos; excluye tarjetas sin último repaso. SM-2 programa intervalos y no produce esta probabilidad."
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: "Estimación o estado vacío (modeledCards 0, porcentajes y próxima fecha null, points vacío). Respuesta privada no-store con x-correlation-id."
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [success, data]
+ *               additionalProperties: false
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   enum: [true]
+ *                 data:
+ *                   type: object
+ *                   additionalProperties: false
+ *                   required: [asOf, modeledCards, averageRetentionNowPercent, nextScheduledReviewAt, points]
+ *                   properties:
+ *                     asOf:
+ *                       type: string
+ *                       format: date-time
+ *                       description: Referencia UTC de statement_timestamp() PostgreSQL.
+ *                     modeledCards:
+ *                       type: integer
+ *                       minimum: 0
+ *                     averageRetentionNowPercent:
+ *                       type: number
+ *                       minimum: 0
+ *                       maximum: 100
+ *                       nullable: true
+ *                     nextScheduledReviewAt:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                       description: Próxima revisión estrictamente futura entre tarjetas estudiadas.
+ *                     points:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         additionalProperties: false
+ *                         required: [daysAhead, estimatedRetentionPercent]
+ *                         properties:
+ *                           daysAhead:
+ *                             type: integer
+ *                             enum: [0, 1, 3, 7, 14, 30]
+ *                           estimatedRetentionPercent:
+ *                             type: number
+ *                             minimum: 0
+ *                             maximum: 100
+ *       '400':
+ *         description: Parámetros o cuerpo no permitidos.
+ *       '401':
+ *         description: JWT o sesión no válidos.
+ *       '500':
+ *         description: Error interno seguro.
+ *       '503':
+ *         description: PostgreSQL no disponible.
+ */
+/**
+ * @swagger
  * components:
  *   schemas:
  *     DashboardSummary:
@@ -238,7 +305,7 @@ const emptyQuery = z.strictObject({});
 function createDashboardRouter(service, authService) {
   const router = Router();
   router.use(requestContext, (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
-  router.get('/', createAuthenticate(authService), (req, res, next) => {
+  for (const [path, method] of [['/', 'get'], ['/retention', 'getRetention']]) router.get(path, createAuthenticate(authService), (req, res, next) => {
     const params = new URLSearchParams(req.originalUrl.split('?')[1] || '');
     // No cuerpo, cualquiera que sea su Content-Type; tampoco identidades alternativas.
     const body = req.headers['transfer-encoding'] !== undefined
@@ -247,7 +314,7 @@ function createDashboardRouter(service, authService) {
       return res.status(400).json({ success: false, message: 'La solicitud no admite parámetros ni cuerpo.' });
     }
     next();
-  }, createController(service));
+  }, createController(service, method));
   router.use((error, req, res, next) => next(isPostgresUnavailable(error) ? new DashboardUnavailableError() : error));
   return router;
 }

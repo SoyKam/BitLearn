@@ -2,6 +2,14 @@ const dueCondition = require('./review-eligibility');
 
 function createDashboardRepository(database) {
   return {
+    async findRetentionByUser(userId) {
+      const { rows } = await database.query(`
+        SELECT clock.as_of, p.interval_days, p.last_review_at, p.next_review_at
+        FROM (SELECT statement_timestamp() AS as_of) clock
+        LEFT JOIN public.user_card_progress p ON p.user_id = $1 AND p.last_review_at IS NOT NULL
+        ORDER BY p.flashcard_id`, [userId]);
+      return rows;
+    },
     async findByUser(userId) {
       // Una sentencia, una instantánea y un reloj PostgreSQL. Las agregaciones
       // independientes evitan multiplicar lecciones por tarjetas o historial.

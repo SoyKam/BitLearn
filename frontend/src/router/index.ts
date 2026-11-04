@@ -5,6 +5,7 @@ import { authGuard } from './auth.guard'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    { path: '/dashboard', name: 'dashboard', component: () => import('../views/DashboardView.vue'), meta: { requiresAuth: true } },
     {
       path: '/',
       name: 'welcome',

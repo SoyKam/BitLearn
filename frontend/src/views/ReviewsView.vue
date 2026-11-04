@@ -26,7 +26,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       <h1 id="reviews-title">Centro de repasos</h1>
       <p class="description">Recuerda lo aprendido con flashcards y repasos programados por SM-2.</p>
       <nav class="auth-links" aria-label="Navegación de repasos">
-        <RouterLink to="/cursos">Explorar cursos</RouterLink><RouterLink to="/mi-progreso">Mi progreso</RouterLink><RouterLink to="/perfil">Mi perfil</RouterLink>
+        <RouterLink to="/dashboard">Mi dashboard</RouterLink>
+      <RouterLink to="/cursos">Explorar cursos</RouterLink><RouterLink to="/mi-progreso">Mi progreso</RouterLink><RouterLink to="/perfil">Mi perfil</RouterLink>
       </nav>
     </header>
     <p class="catalog-status">Si perdiste una confirmación al cerrar o recargar la página, consulta tu historial antes de iniciar otro repaso.</p>
