@@ -10,7 +10,8 @@
     "db:check": "node scripts/check-db.js",
     "db:migrate": "node scripts/migrate.js",
     "db:seed:catalog": "node scripts/seed-catalog.js",
-    "db:seed:questions": "node scripts/seed-questions.js"
+    "db:seed:questions": "node scripts/seed-questions.js",
+    "db:seed:flashcards": "node scripts/seed-flashcards.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

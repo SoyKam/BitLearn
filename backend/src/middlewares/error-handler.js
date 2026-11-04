@@ -1,3 +1,4 @@
+const { FlashcardsUnavailableError } = require('../services/flashcard.service');
 const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError } = require('../services/auth.service');
 const { CatalogUnavailableError } = require('../services/course.service');
 
@@ -31,7 +32,7 @@ function errorHandler(error, req, res, next) {
   if (error instanceof CatalogUnavailableError) {
     return res.status(503).json({ success: false, message: 'El catálogo no está disponible temporalmente.' });
   }
-  if (error instanceof LearningUnavailableError) {
+  if (error instanceof LearningUnavailableError || error instanceof FlashcardsUnavailableError) {
     return res.status(503).json({ success: false, message: 'El servicio no está disponible temporalmente.' });
   }
   return res.status(500).json({ success: false, message: 'No se pudo completar la solicitud.' });

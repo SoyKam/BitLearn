@@ -214,3 +214,42 @@ npm test
 Cubren validación, JWT y sesiones revocadas, aislamiento, concurrencia con bloqueo
 real, errores seguros, límite de solicitudes, seed idempotente y rollback. Si falta
 PostgreSQL local, las pruebas de integración se señalan como omitidas.
+
+### Flashcards educativas (commit #24)
+
+Las flashcards son preguntas breves con su respuesta para practicar recuperación
+de memoria. El seed `backend/database/seeds/003_web_flashcards.json` incorpora
+15 tarjetas: cinco de HTML, cinco de CSS y cinco de JavaScript, repartidas 2–2–1
+entre las tres lecciones de cada curso. Se vinculan por slug, posición y título
+de unidad y lección, sin IDs fijos.
+
+Con las migraciones 001–004 y el catálogo ya cargados, la carga es manual:
+
+```bash
+cd backend
+npm run db:seed:flashcards
+```
+
+**Este comando modifica la base PostgreSQL configurada.** No se ejecuta al iniciar
+Express. Valida el contenido con Zod antes de conectar, usa una transacción y
+bloqueos con espera máxima de 10 segundos. Conserva tarjetas idénticas; ante una
+posición con contenido distinto, un frente desplazado o una lección incompatible,
+revierte toda la carga sin sobrescribir ni eliminar contenido ajeno. Informa los
+conteos únicamente después de COMMIT y permite repetir la carga sin duplicados.
+
+`GET /api/flashcards?course=html` (también `css` o `javascript`) es público y devuelve
+`{ success: true, data: [...] }` con `id`, `lessonId`, `lessonTitle`, `position`,
+`front` y `back`, ordenados por unidad, lección y posición. `course` es obligatorio,
+único y debe ser un slug de 1–150 caracteres en minúsculas, números y guiones
+interiores; no se admiten otros parámetros. Devuelve 400 ante entradas inválidas,
+404 si no existe el curso y 200 con arreglo vacío si existe sin tarjetas.
+Swagger documenta el contrato y los errores 500/503 sin detalles internos.
+
+Este avance implementa el contenido y la consulta de RF-05; la interfaz de estudio
+queda pendiente. No crea progreso individual ni historial. El commit #25 integrará
+el motor SM-2 con el registro autenticado y transaccional de repasos; RF-07, RF-08
+y RF-10 no se implementan aquí. Se mantienen intactos el motor y el frontend.
+
+Pruebas desde `backend/`: `node --test tests/flashcards.test.js tests/flashcards.integration.test.js`
+y `npm test`. La integración usa exclusivamente PostgreSQL temporal por socket
+privado; se omite explícitamente si no están disponibles sus binarios.

@@ -1,0 +1,152 @@
+[
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 1,
+    "lessonTitle": "Estructura básica de HTML",
+    "position": 1,
+    "front": "¿Qué propósito tiene <!doctype html> al inicio del documento?",
+    "back": "Indica HTML moderno y activa el modo estándar del navegador."
+  },
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 1,
+    "lessonTitle": "Estructura básica de HTML",
+    "position": 2,
+    "front": "¿Cómo se reparten las funciones entre head y body?",
+    "back": "head contiene metadatos del documento; body contiene el contenido de la página."
+  },
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 2,
+    "lessonTitle": "Etiquetas y elementos HTML",
+    "position": 1,
+    "front": "¿Cómo se crea un enlace y se indica su destino en HTML?",
+    "back": "Se usa <a> con el atributo href para indicar la dirección de destino."
+  },
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 2,
+    "lessonTitle": "Etiquetas y elementos HTML",
+    "position": 2,
+    "front": "¿Para qué sirve alt en una imagen?",
+    "back": "Proporciona una alternativa textual; en imágenes puramente decorativas se usa alt vacío."
+  },
+  {
+    "courseSlug": "html",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de HTML",
+    "lessonPosition": 3,
+    "lessonTitle": "Formularios HTML",
+    "position": 1,
+    "front": "¿Qué valores deben coincidir para asociar un label con un control?",
+    "back": "El atributo for de label debe coincidir con el id del control."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 1,
+    "lessonTitle": "Selectores CSS",
+    "position": 1,
+    "front": "¿Qué significa el punto en un selector como .aviso?",
+    "back": "Selecciona los elementos que incluyen aviso en su atributo class."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 1,
+    "lessonTitle": "Selectores CSS",
+    "position": 2,
+    "front": "¿Qué selecciona #principal en CSS?",
+    "back": "El elemento cuyo atributo id es principal."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 2,
+    "lessonTitle": "Modelo de caja",
+    "position": 1,
+    "front": "¿En qué se diferencian padding y margin?",
+    "back": "padding crea espacio entre el contenido y el borde; margin crea espacio exterior al borde."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 2,
+    "lessonTitle": "Modelo de caja",
+    "position": 2,
+    "front": "¿Qué incluye el ancho con box-sizing: border-box?",
+    "back": "Incluye contenido, padding y borde, pero no margin."
+  },
+  {
+    "courseSlug": "css",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de CSS",
+    "lessonPosition": 3,
+    "lessonTitle": "Flexbox",
+    "position": 1,
+    "front": "¿Qué efecto tiene display: flex sobre los hijos directos de un contenedor?",
+    "back": "Los organiza como elementos flexibles en una fila o columna, según flex-direction."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 1,
+    "lessonTitle": "Variables y tipos de datos",
+    "position": 1,
+    "front": "¿Qué diferencia hay entre let y const al reasignar una variable?",
+    "back": "let permite reasignarla; const no. Un objeto declarado con const puede modificar sus propiedades."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 1,
+    "lessonTitle": "Variables y tipos de datos",
+    "position": 2,
+    "front": "¿Qué tipos representan números, texto y valores lógicos en JavaScript?",
+    "back": "number representa números, string representa texto y boolean representa true o false."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 2,
+    "lessonTitle": "Condicionales",
+    "position": 1,
+    "front": "¿Cómo eligen if y else qué bloque ejecutar?",
+    "back": "if ejecuta su bloque si la condición es verdadera; else ejecuta la alternativa si es falsa."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 2,
+    "lessonTitle": "Condicionales",
+    "position": 2,
+    "front": "¿Cómo se diferencian == y === al comparar valores?",
+    "back": "== puede convertir tipos antes de comparar; === compara sin convertirlos."
+  },
+  {
+    "courseSlug": "javascript",
+    "unitPosition": 1,
+    "unitTitle": "Fundamentos de JavaScript",
+    "lessonPosition": 3,
+    "lessonTitle": "Funciones",
+    "position": 1,
+    "front": "¿Qué ocurre al ejecutar return dentro de una función?",
+    "back": "Termina la ejecución de la función y devuelve el valor indicado; sin valor, devuelve undefined."
+  }
+]
