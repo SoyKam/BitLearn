@@ -320,7 +320,7 @@ test('aplicación real monta login y Swagger conserva contratos anteriores', asy
   assert.equal(response.status, 401);
   await response.json();
   const spec = require('../src/config/swagger');
-  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/refresh', '/api/auth/register', '/api/courses', '/api/courses/{slug}', '/api/flashcards', '/api/health',
+  assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/refresh', '/api/auth/register', '/api/courses', '/api/courses/{slug}', '/api/dashboard', '/api/flashcards', '/api/health',
     '/api/lessons/{id}', '/api/lessons/{id}/answer', '/api/progress', '/api/reviews', '/api/reviews/due', '/api/reviews/history']);
   assert.deepEqual(Object.keys(spec.paths['/api/auth/login'].post.responses), ['200', '400', '401', '429', '500']);
   assert.equal(spec.components.schemas.LoginInput.additionalProperties, false);

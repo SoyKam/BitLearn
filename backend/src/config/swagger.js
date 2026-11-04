@@ -17,7 +17,7 @@ const options = {
     ],
   },
   // Documentar solo routers públicos activos; el de usuarios sigue deshabilitado.
-  apis: ['health.routes.js', 'auth.routes.js', 'course.routes.js', 'lesson.routes.js', 'progress.routes.js', 'flashcard.routes.js', 'review.routes.js'].map((file) => path.join(__dirname, '../routes', file)),
+  apis: ['health.routes.js', 'auth.routes.js', 'course.routes.js', 'lesson.routes.js', 'progress.routes.js', 'flashcard.routes.js', 'review.routes.js', 'dashboard.routes.js'].map((file) => path.join(__dirname, '../routes', file)),
 };
 
 const swaggerSpec = swaggerJsdoc(options);

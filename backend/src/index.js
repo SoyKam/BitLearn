@@ -14,6 +14,9 @@ const createTokenService = require('./services/token.service');
 const createCourseRepository = require('./repositories/course.repository');
 const { createCourseService } = require('./services/course.service');
 const createCourseRouter = require('./routes/course.routes');
+const createDashboardRepository = require('./repositories/dashboard.repository');
+const { createDashboardService } = require('./services/dashboard.service');
+const createDashboardRouter = require('./routes/dashboard.routes');
 const createReviewRepository = require('./repositories/review.repository');
 const { createReviewService } = require('./services/review.service');
 const createReviewRouter = require('./routes/review.routes');
@@ -42,6 +45,7 @@ app.use('/api/health', healthRoutes);
 const authService = createAuthService(createUserRepository(pool),
   createSessionRepository(pool), createTokenService(authConfig));
 app.use('/api/auth', createAuthRouter(authService, authConfig));
+app.use('/api/dashboard', createDashboardRouter(createDashboardService(createDashboardRepository(pool)), authService));
 app.use('/api/reviews', createReviewRouter(createReviewService(createReviewRepository(pool)), authService));
 const progressRepository = createProgressRepository(pool);
 app.use('/api/lessons', createLessonRouter(

@@ -393,3 +393,65 @@ npm test
 
 La integración utiliza exclusivamente PostgreSQL temporal, incluyendo verificaciones
 con transacciones de solo lectura y comparación de datos antes/después de los GET.
+
+## Estadísticas personales (commit #28)
+
+`GET /api/dashboard` requiere Bearer JWT válido y sesión activa. Devuelve
+`{ success: true, data: { summary, courses } }` con datos reales de PostgreSQL.
+No admite query (incluidos `userId`, filtros, límites y parámetros repetidos)
+ni cuerpo. La identidad procede exclusivamente de `req.auth.userId`; encabezados
+alternativos no permiten seleccionar otro usuario. Las respuestas privadas llevan
+`Cache-Control: no-store` y `x-correlation-id`.
+
+`summary` contiene:
+
+- `totalLessons`: todas las lecciones actuales del catálogo.
+- `completedLessons`: filas del usuario con `completed_at IS NOT NULL`; los
+  intentos y aciertos repetidos no multiplican lecciones.
+- `completionPercent`: completadas / total × 100, redondeado a dos decimales,
+  entre 0 y 100; cero cuando no existen lecciones.
+- `studiedFlashcards`: parejas usuario-tarjeta existentes en `user_card_progress`,
+  contadas una sola vez aunque tengan varios repasos.
+- `dueReviews`: total sin límite de tarjetas nuevas de lecciones completadas
+  sin estado SM-2, más tarjetas con estado vencido. Comparte la condición SQL
+  con `/api/reviews/due` y usa `statement_timestamp()` de PostgreSQL. Un estado
+  ya activado y vencido sigue siendo elegible aunque se retire la finalización
+  de su lección, igual que en el endpoint existente.
+- `totalReviews`: registros confirmados del usuario en `card_reviews`; reproducir
+  una solicitud idempotente no añade registros.
+
+`courses` contiene `courseId`, `courseSlug`, `courseTitle`, `totalLessons`,
+`completedLessons` y `completionPercent` para cada curso existente, ordenados por
+slug e ID. Cada porcentaje usa únicamente las lecciones de ese curso. Conserva
+cursos sin progreso y sin lecciones. Un usuario nuevo recibe ceros personales y
+el catálogo real; un catálogo vacío devuelve `courses: []` y contadores cero.
+
+Una sentencia SELECT con CTE obtiene una única instantánea. Agregaciones separadas
+para progreso, estados e historial evitan multiplicaciones por joins uno-a-muchos.
+No hay N+1, descarga de historiales ni límites artificiales en los conteos. Los
+contadores BIGINT se normalizan a enteros seguros de JavaScript: datos negativos,
+fraccionarios o fuera de rango se rechazan, sin truncarlos ni inventar valores.
+
+Swagger (`/api-docs`) incluye esquemas, ejemplo ilustrativo y respuestas 200,
+400 (solicitud inválida), 401 (sesión inválida), 500 (error interno) y 503
+(PostgreSQL no disponible), sin detalles sensibles. El GET solo lee: no activa
+flashcards, no crea estados, no altera fechas/historial y no ejecuta SM-2.
+
+Pruebas desde `backend/`:
+
+```bash
+node --test tests/dashboard.test.js
+node --test tests/dashboard.integration.test.js
+npm test
+```
+
+Las integraciones usan exclusivamente PostgreSQL temporal aislado, migraciones
+001–004 y seeds existentes. Comprueban el flujo HTTP real, usuarios independientes,
+reenvíos idempotentes, más de 100 pendientes, catálogo vacío y cursos vacíos.
+Los GET se ejecutan en modo PostgreSQL de solo lectura y se compara el contenido
+de las tablas antes/después. Si faltan binarios PostgreSQL, se omiten explícitamente.
+No es necesario ejecutar migraciones ni seeds sobre la base principal para este cambio.
+
+Este avance aporta el backend de RF-09 y reutiliza RF-04, RF-05, RF-07 y RF-08.
+**RF-09 todavía no está integrado visualmente en Vue.** El commit #29 queda dedicado
+a RF-10, la proyección estimada de retención, que este endpoint no calcula.
