@@ -199,3 +199,15 @@ button:disabled { cursor: wait; }
 .answer-option input { width: 1.25rem; height: 1.25rem; min-height: 0; flex-shrink: 0; accent-color: var(--text); }
 .answer-option span { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
 .answer-feedback:not(:empty) { margin-top: 1rem; }
+
+.study-card { margin-block: 1.5rem; }
+.study-card h3 { margin-top: 1.5rem; }
+.study-card > .button { margin-top: 1.25rem; }
+.review-grades { margin-top: 1.5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.review-grades legend { font-weight: 650; margin-bottom: 0.75rem; }
+.review-grades .button { flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.review-grades span { font-size: 0.875rem; font-weight: 400; }
+.reviews-page .catalog > .button { margin-block: 1rem; }
+.reviews-page summary { cursor: pointer; padding-block: 0.5rem; }
+.reviews-page summary:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+@media (max-width: 380px) { .review-grades { grid-template-columns: minmax(0, 1fr); } }

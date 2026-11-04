@@ -21,6 +21,7 @@ onUnmounted(() => store.clearLesson())
       <p v-if="store.lesson" class="description">Curso: {{ store.lesson.course.title }} · Unidad: {{ store.lesson.unit.title }}</p>
       <nav class="auth-links" aria-label="Navegación de la lección">
         <RouterLink v-if="store.lesson" :to="{ name: 'course-detail', params: { slug: store.lesson.course.slug } }">Volver al curso y explorar lecciones</RouterLink>
+        <RouterLink to="/repasos">Practicar con flashcards</RouterLink>
         <RouterLink to="/cursos">Ver catálogo</RouterLink>
         <RouterLink to="/mi-progreso">Mi progreso</RouterLink>
       </nav>
