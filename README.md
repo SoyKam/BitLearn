@@ -12,6 +12,11 @@ El proyecto contempla seguimiento del progreso, repasos personalizados y una est
 
 **Estado del proyecto:** En desarrollo.
 
+El motor de dominio SM-2 del commit #23 está implementado y se prueba sin base
+de datos con `cd backend && node --test tests/sm2.test.js`. Su contrato, fórmula,
+precisión y variante están en [Algoritmo SM-2](docs/algoritmo-sm2.md).
+La integración con servicios de repasos y persistencia queda pendiente.
+
 ## Verificar PostgreSQL
 
 Con las dependencias del backend instaladas, configura `DB_HOST`, `DB_PORT`,
