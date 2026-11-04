@@ -18,7 +18,8 @@ watch(() => auth.isAuthenticated ? auth.user?.id : null, id => {
       <h1 id="progress-title">Mi progreso</h1>
       <nav class="auth-links" aria-label="Navegación del progreso">
         <RouterLink to="/repasos">Mis repasos</RouterLink>
-        <RouterLink to="/cursos">Explorar cursos</RouterLink>
+        <RouterLink to="/dashboard">Mi dashboard</RouterLink>
+      <RouterLink to="/cursos">Explorar cursos</RouterLink>
         <RouterLink to="/perfil">Mi perfil</RouterLink>
       </nav>
     </header>
