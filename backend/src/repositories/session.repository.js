@@ -1,3 +1,5 @@
+const isPostgresUnavailable = require('../config/postgres-errors');
+
 function createSessionRepository(database) {
   async function transaction(work, begin = 'BEGIN') {
     const client = await database.connect();
@@ -11,7 +13,7 @@ function createSessionRepository(database) {
       return result;
     } catch (error) {
       // Un fallo de COMMIT puede dejar un resultado desconocido: no reutilizar conexión.
-      if (committing) releaseError = error;
+      if (committing || isPostgresUnavailable(error)) releaseError = error;
       try {
         await client.query('ROLLBACK');
       } catch (rollbackError) {

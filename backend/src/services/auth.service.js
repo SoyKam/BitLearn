@@ -7,6 +7,7 @@ const PASSWORD_COST = 10;
 class EmailAlreadyRegisteredError extends Error {}
 class IncorrectCredentialsError extends Error {}
 class InvalidSessionError extends Error {}
+class AuthUnavailableError extends Error {}
 
 let dummyHash;
 function getDummyHash() {
@@ -72,4 +73,4 @@ function createAuthService(userRepository, sessionRepository, tokenService) {
   };
 }
 
-module.exports = { createAuthService, EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError };
+module.exports = { createAuthService, EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError, AuthUnavailableError };

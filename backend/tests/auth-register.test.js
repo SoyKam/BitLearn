@@ -98,7 +98,7 @@ test('bcrypt genera sales distintas para una misma contraseña', async () => {
 for (const [label, error, status] of [
   ['correo duplicado', { code: '23505', constraint: 'users_email_key' }, 409],
   ['otra clave única', { code: '23505', constraint: 'users_pkey' }, 500],
-  ['fallo PostgreSQL', { code: 'ECONNREFUSED' }, 500],
+  ['fallo PostgreSQL', { code: 'ECONNREFUSED' }, 503],
 ]) {
   test(`${status}: ${label}, sin filtrar errores ni datos a respuesta o logs`, async (t) => {
     const log = t.mock.method(console, 'error', () => {});
@@ -108,8 +108,8 @@ for (const [label, error, status] of [
     const response = await post(valid);
     assert.equal(response.status, status);
     assert.deepEqual(await response.json(), { success: false,
-      message: status === 409 ? 'El correo ya está registrado.' : 'No se pudo completar la solicitud.' });
-    if (status === 500) {
+      message: status === 409 ? 'El correo ya está registrado.' : status === 503 ? 'El servicio no está disponible temporalmente.' : 'No se pudo completar la solicitud.' });
+    if (status >= 500) {
       assert.equal(log.mock.callCount(), 1);
       assert.deepEqual(JSON.parse(log.mock.calls[0].arguments[0]), {
         level: 'error', event: 'request_failed', correlation_id: response.headers.get('x-correlation-id'),
@@ -175,7 +175,7 @@ test('la aplicación monta registro y lo publica en Swagger, conservando health 
   const spec = require('../src/config/swagger');
   assert.deepEqual(Object.keys(spec.paths).sort(), ['/api/auth/login', '/api/auth/logout', '/api/auth/me', '/api/auth/refresh', '/api/auth/register', '/api/courses', '/api/courses/{slug}', '/api/dashboard', '/api/dashboard/retention', '/api/flashcards', '/api/health',
     '/api/lessons/{id}', '/api/lessons/{id}/answer', '/api/progress', '/api/reviews', '/api/reviews/due', '/api/reviews/history']);
-  assert.deepEqual(Object.keys(spec.paths['/api/auth/register'].post.responses), ['201', '400', '409', '429', '500']);
+  assert.deepEqual(Object.keys(spec.paths['/api/auth/register'].post.responses), ['201', '400', '409', '429', '500', '503']);
   const swagger = await fetch(`${base}/api-docs/swagger-ui-init.js`);
   assert.match(await swagger.text(), /"\/api\/auth\/register"/);
   const health = await fetch(`${base}/api/health`);

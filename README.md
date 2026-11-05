@@ -473,3 +473,19 @@ este cambio no define funcionalidades adicionales para el commit #30.
 Pruebas nuevas: `backend/tests/retention*.test.js` (dominio sin DB e integración
 con PostgreSQL temporal) y `frontend/tests/dashboard*.test.js` (contratos, sesión,
 estado y navegador con mocks). No requieren migraciones ni seeds en la base real.
+
+## Seguridad y resiliencia (commit #30)
+
+La [auditoría y matriz de evidencia](docs/seguridad-resiliencia.md) documenta
+controles conservados, correcciones, pruebas y límites de despliegue. Express
+añade cabeceras de seguridad y correlación global; autenticación devuelve 503 ante
+indisponibilidad PostgreSQL identificable. El pool limita sentencias a 5 segundos
+y esperas de bloqueo a 3 segundos, conservando TLS y la adquisición a 10 segundos.
+Una cola en memoria acotada registra metadatos anónimos de respuestas 429; no
+interviene en SM-2 ni sustituye transacciones. Vite recibe el parche 8.3.3.
+
+Verificación: backend 442 y frontend 426 pruebas aprobadas, sin omisiones;
+typecheck y build correctos. Incluye PostgreSQL temporal aislado y Playwright.
+Las nueve alertas npm del backend permanecen documentadas según sus condiciones
+de exposición; el frontend queda sin alertas conocidas por npm en esta revisión.
+No se requieren migraciones, seeds ni cambios de .env para este commit.
