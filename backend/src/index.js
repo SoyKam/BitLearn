@@ -30,12 +30,16 @@ const { createLessonService } = require('./services/lesson.service');
 const createProgressService = require('./services/progress.service');
 const createLessonRouter = require('./routes/lesson.routes');
 const createProgressRouter = require('./routes/progress.routes');
+const requestContext = require('./middlewares/request-context');
+const securityHeaders = require('./middlewares/security-headers');
 
 // Fallar antes de escuchar HTTP si faltan secretos o la configuración es insegura.
 const authConfig = loadAuthConfig();
 
 const app = express();
 app.set('trust proxy', false);
+app.disable('x-powered-by');
+app.use(requestContext, securityHeaders);
 const PORT = process.env.PORT || 3000;
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));

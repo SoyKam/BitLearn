@@ -3,6 +3,8 @@ const unavailableCodes = new Set([
   'ENOTFOUND', 'EAI_AGAIN', 'ENETUNREACH', 'EHOSTUNREACH',
   '08000', '08001', '08003', '08006', '08007',
   '53300', '57P01', '57P02', '57P03',
+  // Consulta cancelada / espera de bloqueo agotada, no errores de SQL o integridad.
+  '57014', '55P03',
 ]);
 // pg/pg-pool también emiten estos errores de conexión sin código.
 const unavailableMessages = new Set([

@@ -6,6 +6,8 @@ const requestContext = require('../middlewares/request-context');
 const validateLogin = require('../middlewares/validate-login');
 const createAuthenticate = require('../middlewares/authenticate');
 const createValidateAuthOrigin = require('../middlewares/validate-auth-origin');
+const isPostgresUnavailable = require('../config/postgres-errors');
+const { AuthUnavailableError } = require('../services/auth.service');
 
 function noStore(req, res, next) {
   res.set('Cache-Control', 'no-store');
@@ -179,6 +181,12 @@ function noStore(req, res, next) {
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/RegistrationError'
+ *     AuthUnavailable:
+ *       description: PostgreSQL temporalmente no disponible o consulta cancelada por timeout; sin detalles internos. No confirma escrituras ni revocaciones.
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegistrationError'
  *     FailedRegistration:
  *       description: Error interno; no se exponen detalles técnicos.
  *       content:
@@ -219,6 +227,8 @@ function noStore(req, res, next) {
  *         $ref: '#/components/responses/LimitedRegistration'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ *       503:
+ *         $ref: '#/components/responses/AuthUnavailable'
  * /api/auth/login:
  *   post:
  *     summary: Iniciar sesión con credenciales
@@ -273,6 +283,8 @@ function noStore(req, res, next) {
  *               $ref: '#/components/schemas/RegistrationError'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ *       503:
+ *         $ref: '#/components/responses/AuthUnavailable'
  * /api/auth/refresh:
  *   post:
  *     summary: Renovar credenciales de la sesión
@@ -312,6 +324,8 @@ function noStore(req, res, next) {
  *               $ref: '#/components/schemas/RegistrationError'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ *       503:
+ *         $ref: '#/components/responses/AuthUnavailable'
  * /api/auth/logout:
  *   post:
  *     summary: Cerrar únicamente la sesión de la cookie
@@ -319,7 +333,7 @@ function noStore(req, res, next) {
  *     security:
  *       - refreshCookie: []
  *       - {}
- *     description: Revoca la sesión identificada por el hash de la cookie, incluso si el token fue consumido. Conserva el historial y las demás sesiones. Idempotente sin cookie válida o con sesión ya revocada. Origin debe estar en AUTH_TRUSTED_ORIGINS si está presente. Todas las respuestas usan Cache-Control no-store. Un fallo de persistencia devuelve 500, aunque se limpia la cookie; no garantiza la revocación.
+ *     description: Revoca la sesión identificada por el hash de la cookie, incluso si el token fue consumido. Conserva el historial y las demás sesiones. Idempotente sin cookie válida o con sesión ya revocada. Origin debe estar en AUTH_TRUSTED_ORIGINS si está presente. Todas las respuestas usan Cache-Control no-store. Un fallo de persistencia devuelve 500 o 503 (indisponibilidad identificable), aunque se limpia la cookie; no garantiza la revocación.
  *     responses:
  *       200:
  *         description: Cierre controlado; no revela si existía la sesión.
@@ -345,6 +359,8 @@ function noStore(req, res, next) {
  *         $ref: '#/components/responses/InvalidAuthOrigin'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ *       503:
+ *         $ref: '#/components/responses/AuthUnavailable'
  * /api/auth/me:
  *   get:
  *     summary: Consultar la identidad autenticada
@@ -371,12 +387,14 @@ function noStore(req, res, next) {
  *         $ref: '#/components/responses/InvalidSession'
  *       500:
  *         $ref: '#/components/responses/FailedRegistration'
+ *       503:
+ *         $ref: '#/components/responses/AuthUnavailable'
  */
 function createAuthRouter(authService, config) {
   const router = Router();
   const controller = createAuthController(authService, config);
   const validateOrigin = createValidateAuthOrigin(config);
-  router.post('/register', requestContext, createRegisterRateLimit(),
+  router.post('/register', requestContext, noStore, createRegisterRateLimit(),
     json({ limit: '4kb', inflate: false }), validateRegister, controller.register);
   router.post('/login', requestContext, noStore, validateOrigin,
   createRegisterRateLimit({ limit: 20, action: 'inicio de sesión' }),
@@ -385,6 +403,7 @@ function createAuthRouter(authService, config) {
     createRegisterRateLimit({ limit: 60, action: 'renovación' }), controller.refresh);
   router.post('/logout', requestContext, noStore, validateOrigin, controller.logout);
   router.get('/me', requestContext, noStore, createAuthenticate(authService), controller.me);
+  router.use((error, req, res, next) => next(isPostgresUnavailable(error) ? new AuthUnavailableError() : error));
   return router;
 }
 

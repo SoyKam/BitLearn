@@ -1,7 +1,7 @@
 const { DashboardUnavailableError } = require('../services/dashboard.service');
 const { ReviewNotFoundError, ReviewForbiddenError, ReviewConflictError, ReviewNotDueError, ReviewsUnavailableError } = require('../services/review.service');
 const { FlashcardsUnavailableError } = require('../services/flashcard.service');
-const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError } = require('../services/auth.service');
+const { EmailAlreadyRegisteredError, IncorrectCredentialsError, InvalidSessionError, AuthUnavailableError } = require('../services/auth.service');
 const { CatalogUnavailableError } = require('../services/course.service');
 
 const { LearningInputError, LearningNotFoundError, LearningUnavailableError } = require('../services/lesson.service');
@@ -43,7 +43,7 @@ function errorHandler(error, req, res, next) {
   if (error instanceof CatalogUnavailableError) {
     return res.status(503).json({ success: false, message: 'El catálogo no está disponible temporalmente.' });
   }
-  if (error instanceof DashboardUnavailableError || error instanceof ReviewsUnavailableError || error instanceof LearningUnavailableError || error instanceof FlashcardsUnavailableError) {
+  if (error instanceof AuthUnavailableError || error instanceof DashboardUnavailableError || error instanceof ReviewsUnavailableError || error instanceof LearningUnavailableError || error instanceof FlashcardsUnavailableError) {
     return res.status(503).json({ success: false, message: 'El servicio no está disponible temporalmente.' });
   }
   return res.status(500).json({ success: false, message: 'No se pudo completar la solicitud.' });

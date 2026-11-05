@@ -31,6 +31,9 @@ const pool = new Pool({
   },
 
   connectionTimeoutMillis: 10000,
+  // Cancelación del servidor: no abandonar una consulta aún activa en el cliente.
+  statement_timeout: 5000,
+  lock_timeout: 3000,
 });
 
 pool.on('error', () => {

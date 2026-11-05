@@ -54,6 +54,18 @@ async function login(page) {
 }
 const posts = calls => calls.filter(c => c.path === '/api/reviews' && c.method === 'POST')
 
+test('flashcard con img/onerror se muestra como texto sin ejecutar JavaScript', async t => {
+  const payload = '<img src=x onerror=alert(1)>'
+  const { page } = await setup(t, { due: () => ({ data: [{ ...card, front: payload, back: payload }] }) })
+  const dialogs = []
+  page.on('dialog', async dialog => { dialogs.push(dialog.message()); await dialog.dismiss() })
+  await login(page)
+  await page.getByRole('button', { name: 'Mostrar respuesta' }).click()
+  assert.equal(await page.locator('.study-card .lesson-text').allTextContents().then(texts => texts.every(text => text === payload)), true)
+  assert.equal(await page.locator('.study-card img').count(), 0)
+  assert.deepEqual(dialogs, [])
+})
+
 test('guard, login, frente/reverso, teclado, doble clic, confirmación SM-2 y recarga', async t => {
   const gate = deferred()
   const { page, calls, handlers } = await setup(t, { post: async () => { await gate.promise; return { data: result } } })

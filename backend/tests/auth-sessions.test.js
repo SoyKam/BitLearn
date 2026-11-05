@@ -360,9 +360,9 @@ test('Swagger publica contratos de sesiones con cookie/Bearer, sin users heredad
   assert.equal(spec.components.securitySchemes.refreshCookie.name, 'bitlearn_refresh');
   assert.equal(spec.components.securitySchemes.bearerAuth.scheme, 'bearer');
   for (const [route, method, codes, scheme] of [
-    ['refresh', 'post', ['200', '400', '401', '429', '500'], 'refreshCookie'],
-    ['logout', 'post', ['200', '400', '500'], 'refreshCookie'],
-    ['me', 'get', ['200', '401', '500'], 'bearerAuth'],
+    ['refresh', 'post', ['200', '400', '401', '429', '500', '503'], 'refreshCookie'],
+    ['logout', 'post', ['200', '400', '500', '503'], 'refreshCookie'],
+    ['me', 'get', ['200', '401', '500', '503'], 'bearerAuth'],
   ]) {
     const operation = spec.paths[`/api/auth/${route}`][method];
     assert.deepEqual(Object.keys(operation.responses), codes);
