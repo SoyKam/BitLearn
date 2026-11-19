@@ -11,7 +11,11 @@ const certificatePath = path.join(
   '../../certs/bitlearn.crt'
 );
 
-const pool = new Pool({
+// DATABASE_URL is the private, internal Render Postgres connection string.
+// Keep the existing verified TLS path for local development and Codespaces.
+const connection = process.env.RENDER === 'true' && process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL, ssl: false }
+  : {
   host: process.env.DB_HOST,
   port: Number(process.env.DB_PORT),
   database: process.env.DB_NAME,
@@ -30,6 +34,10 @@ const pool = new Pool({
     },
   },
 
+};
+
+const pool = new Pool({
+  ...connection,
   connectionTimeoutMillis: 10000,
   // Cancelación del servidor: no abandonar una consulta aún activa en el cliente.
   statement_timeout: 5000,

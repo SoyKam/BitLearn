@@ -21,7 +21,8 @@ function loadAuthConfig(env = process.env) {
   if (allowHttp === 'true' && (env.NODE_ENV !== 'development' || env.CODESPACES === 'true')) {
     throw new Error('La cookie sin Secure solo se permite en desarrollo HTTP local, fuera de Codespaces.');
   }
-  const trustedOrigins = (env.AUTH_TRUSTED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean);
+  const renderOrigin = env.RENDER === 'true' ? env.RENDER_EXTERNAL_URL : '';
+  const trustedOrigins = (env.AUTH_TRUSTED_ORIGINS || renderOrigin || '').split(',').map((value) => value.trim()).filter(Boolean);
   for (const origin of trustedOrigins) {
     let url;
     try { url = new URL(origin); } catch { /* Mensaje fijo, sin reflejar configuración. */ }

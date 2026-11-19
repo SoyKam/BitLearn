@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const fs = require('node:fs');
+const path = require('node:path');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const healthRoutes = require('./routes/health.routes');
@@ -59,9 +61,22 @@ app.use('/api/courses', createCourseRouter(createCourseService(createCourseRepos
 
 app.use('/api/flashcards', createFlashcardRouter(createFlashcardService(createFlashcardRepository(pool))));
 
-app.get('/', (req, res) => {
-  res.json({ message: 'API corriendo', docs: '/api-docs' });
-});
+const frontendDir = path.resolve(__dirname, '../../frontend/dist');
+const frontendIndex = path.join(frontendDir, 'index.html');
+if (fs.existsSync(frontendIndex)) {
+  // Missing API and asset URLs must not fall through to Vue's router.
+  app.use('/api', (_req, res) =>
+    res.status(404).json({ success: false, message: 'Ruta no encontrada' }));
+  app.use(express.static(frontendDir));
+  app.get('*', (req, res, next) => {
+    if (path.extname(req.path) || !req.accepts('html')) return next();
+    res.sendFile(frontendIndex);
+  });
+} else {
+  app.get('/', (_req, res) => {
+    res.json({ message: 'API corriendo', docs: '/api-docs' });
+  });
+}
 
 app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Ruta no encontrada' });
