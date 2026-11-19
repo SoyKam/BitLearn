@@ -25,9 +25,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
       <RouterLink class="brand auth-brand" to="/"><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span>BitLearn</RouterLink>
       <h1 id="reviews-title">Centro de repasos</h1>
       <p class="description">Recuerda lo aprendido con flashcards y repasos programados por SM-2.</p>
-      <nav class="auth-links" aria-label="Navegación de repasos">
-        <RouterLink to="/dashboard">Mi dashboard</RouterLink>
-      <RouterLink to="/cursos">Explorar cursos</RouterLink><RouterLink to="/mi-progreso">Mi progreso</RouterLink><RouterLink to="/perfil">Mi perfil</RouterLink>
+      <nav class="auth-links navigation-actions" aria-label="Navegación de repasos">
+        <RouterLink class="button" to="/dashboard">Mi dashboard</RouterLink>
+        <RouterLink class="button" to="/cursos">Explorar cursos</RouterLink>
+        <RouterLink class="button" to="/mi-progreso">Mi progreso</RouterLink>
+        <RouterLink class="button" to="/perfil">Mi perfil</RouterLink>
       </nav>
     </header>
     <p class="catalog-status">Si perdiste una confirmación al cerrar o recargar la página, consulta tu historial antes de iniciar otro repaso.</p>
@@ -42,7 +44,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
         <div v-if="store.loaded && !store.loading && !store.loadError && !store.due.length" class="feedback">
           <p>No tienes repasos pendientes por ahora.</p>
           <p>Completa nuevas lecciones para desbloquear tarjetas o regresa cuando llegue tu próxima revisión.</p>
-          <RouterLink to="/cursos">Explorar cursos</RouterLink>
+          <RouterLink class="button primary" to="/cursos">Explorar cursos</RouterLink>
         </div>
         <nav v-if="store.due.length > 1" class="auth-links" aria-label="Seleccionar flashcard">
           <button v-for="(card, index) in store.due" :key="card.flashcardId" type="button" class="button" :aria-pressed="store.selectedId === card.flashcardId"

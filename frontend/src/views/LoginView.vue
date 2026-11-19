@@ -47,7 +47,7 @@ async function retrySession() {
       <p>No pudimos comprobar tu sesión. Puedes reintentar cuando se recupere la conexión.</p>
       <button class="button" type="button" :disabled="auth.loading" @click="retrySession">Reintentar sesión</button>
     </div>
-    <form novalidate :aria-busy="submitting" @submit.prevent="submit">
+    <form class="auth-form" novalidate :aria-busy="submitting" @submit.prevent="submit">
       <fieldset :disabled="submitting || auth.loading">
         <legend class="sr-only">Credenciales de acceso</legend>
         <AuthField id="email" v-model="form.email" label="Correo electrónico" type="email" autocomplete="email" :maxlength="150" :error="errors.email" />
