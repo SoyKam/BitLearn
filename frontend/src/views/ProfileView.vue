@@ -29,13 +29,13 @@ async function logout() {
       <dt>Correo electrónico</dt><dd>{{ auth.user.email }}</dd>
       <template v-if="registeredOn"><dt>Fecha de registro</dt><dd>{{ registeredOn }}</dd></template>
     </dl>
-    <nav class="auth-links" aria-label="Navegación de perfil">
-      <button class="button primary" type="button" :disabled="auth.loading" @click="logout">Cerrar sesión</button>
-      <RouterLink to="/mi-progreso">Mi progreso</RouterLink>
-      <RouterLink to="/repasos">Mis repasos</RouterLink>
-      <RouterLink to="/dashboard">Mi dashboard</RouterLink>
-      <RouterLink to="/cursos">Explorar cursos</RouterLink>
-      <RouterLink to="/">Regresar al inicio</RouterLink>
+    <nav class="auth-links navigation-actions" aria-label="Navegación de perfil">
+      <RouterLink class="button" to="/mi-progreso">Mi progreso</RouterLink>
+      <RouterLink class="button" to="/repasos">Mis repasos</RouterLink>
+      <RouterLink class="button" to="/dashboard">Mi dashboard</RouterLink>
+      <RouterLink class="button" to="/cursos">Explorar cursos</RouterLink>
+      <RouterLink class="button" to="/">Regresar al inicio</RouterLink>
     </nav>
+    <button class="button profile-logout" type="button" :disabled="auth.loading" @click="logout">Cerrar sesión</button>
   </main>
 </template>

@@ -37,12 +37,12 @@ async function submit(event: Event) {
     <RouterLink class="brand auth-brand" to="/"><span class="brand-mark" aria-hidden="true">&lt;/&gt;</span>BitLearn</RouterLink>
     <h1 id="register-title">Crea tu cuenta</h1>
     <p class="auth-intro">Da el primer paso para aprender a tu ritmo.</p>
-    <form novalidate :aria-busy="submitting" @submit.prevent="submit">
+    <form class="auth-form" novalidate :aria-busy="submitting" @submit.prevent="submit">
       <fieldset :disabled="submitting || auth.loading">
         <legend class="sr-only">Datos de registro</legend>
         <AuthField id="name" v-model="form.name" label="Nombre" autocomplete="name" :maxlength="100" :error="errors.name" />
         <AuthField id="email" v-model="form.email" label="Correo electrónico" type="email" autocomplete="email" :maxlength="150" :error="errors.email" />
-        <AuthField id="password" v-model="form.password" label="Contraseña" type="password" autocomplete="new-password" :error="errors.password" hint="Al menos 12 caracteres y hasta 72 bytes UTF-8. Algunos caracteres ocupan varios bytes." />
+        <AuthField id="password" v-model="form.password" label="Contraseña" type="password" autocomplete="new-password" :error="errors.password" hint="Usa al menos 12 caracteres." />
         <AuthField id="confirmation" v-model="form.confirmation" label="Confirmar contraseña" type="password" autocomplete="new-password" :error="errors.confirmation" />
         <p v-if="Object.keys(errors).length" role="alert" class="field-error">Revisa los campos indicados.</p>
         <p v-if="auth.error" role="alert" class="feedback error">{{ auth.error.message }}</p>
